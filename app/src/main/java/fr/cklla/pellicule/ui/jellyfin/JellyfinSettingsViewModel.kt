@@ -29,7 +29,11 @@ class JellyfinSettingsViewModel @Inject constructor(
         formState,
         jellyfinRepository.session,
     ) { form, session ->
-        form.copy(connectedUsername = session?.username, connectedServerUrl = session?.serverUrl)
+        form.copy(
+            connectedUsername = session?.username,
+            connectedServerUrl = session?.serverUrl,
+            isCleartextServerUrl = form.serverUrl.trim().startsWith("http://", ignoreCase = true),
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),

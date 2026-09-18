@@ -174,6 +174,13 @@ private fun ConnectForm(
             placeholder = stringResource(R.string.jellyfin_server_url_placeholder),
             keyboardType = KeyboardType.Uri,
         )
+        if (uiState.isCleartextServerUrl) {
+            Text(
+                text = stringResource(R.string.jellyfin_cleartext_warning),
+                style = PelliculeTextStyles.emptyMessage,
+                color = TextTertiary,
+            )
+        }
         FormField(
             value = uiState.username,
             onValueChange = onUsernameChanged,

@@ -86,6 +86,7 @@
     <string name="jellyfin_server_url_placeholder">URL du serveur (https://…)</string>
     <string name="jellyfin_username_placeholder">Nom d\'utilisateur</string>
     <string name="jellyfin_password_placeholder">Mot de passe</string>
+    <string name="jellyfin_cleartext_warning">Connexion non chiffrée : le mot de passe circulera en clair sur le réseau. À réserver à un serveur local.</string>
     <string name="jellyfin_connect_action">Se connecter</string>
     <string name="jellyfin_connected_label">Connecté</string>
     <string name="jellyfin_disconnect_action">Se déconnecter</string>

@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -70,6 +71,23 @@ class JellyfinSettingsViewModelTest {
         val state = viewModel.uiState.value
         assertNull(state.connectedUsername)
         assertTrue(state.errorMessage != null)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `une adresse en http signale une connexion non chiffree`() = runTest {
+        val viewModel = JellyfinSettingsViewModel(FakeJellyfinRepository())
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onServerUrlChanged("http://192.168.1.10:8096")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isCleartextServerUrl)
+
+        viewModel.onServerUrlChanged("https://jellyfin.exemple.fr")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isCleartextServerUrl)
+
         collectorJob.cancel()
     }
 
