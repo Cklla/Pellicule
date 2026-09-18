@@ -65,6 +65,7 @@ fun BibliothequeScreen(
     BibliothequeContent(
         uiState = uiState,
         onFilterSelected = viewModel::onFilterSelected,
+        onWatchedYearSelected = viewModel::onWatchedYearSelected,
         onMediaClick = onMediaClick,
         modifier = modifier,
     )
@@ -74,6 +75,7 @@ fun BibliothequeScreen(
 private fun BibliothequeContent(
     uiState: BibliothequeUiState,
     onFilterSelected: (BibliothequeFilter) -> Unit,
+    onWatchedYearSelected: (Int?) -> Unit,
     onMediaClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -88,6 +90,13 @@ private fun BibliothequeContent(
             counts = uiState.filterCounts,
             onFilterSelected = onFilterSelected,
         )
+        if (uiState.selectedFilter == BibliothequeFilter.VU && uiState.availableWatchedYears.isNotEmpty()) {
+            YearChipsRow(
+                years = uiState.availableWatchedYears,
+                selectedYear = uiState.selectedWatchedYear,
+                onYearSelected = onWatchedYearSelected,
+            )
+        }
         if (uiState.visibleMedia.isEmpty()) {
             EmptyState(filter = uiState.selectedFilter, modifier = Modifier.weight(1f))
         } else {
@@ -165,6 +174,55 @@ private fun FilterChip(filter: BibliothequeFilter, count: Int, selected: Boolean
             ),
             color = if (selected) TextPrimary else TextTertiary,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun YearChipsRow(
+    years: List<Int>,
+    selectedYear: Int?,
+    onYearSelected: (Int?) -> Unit,
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            YearChip(
+                label = stringResource(R.string.filter_annee_toutes),
+                selected = selectedYear == null,
+                onClick = { onYearSelected(null) },
+            )
+        }
+        items(items = years, key = { it }) { year ->
+            YearChip(
+                label = year.toString(),
+                selected = year == selectedYear,
+                onClick = { onYearSelected(year) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun YearChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .heightIn(min = 40.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .then(
+                if (selected) Modifier.background(AccentPurpleMuted)
+                else Modifier.border(BorderStroke(0.5.dp, BorderHairline.copy(alpha = 0.4f)), RoundedCornerShape(16.dp))
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = PelliculeTextStyles.chipLabel,
+            color = if (selected) TextPrimary else TextTertiary,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
         )
     }
 }
@@ -257,7 +315,7 @@ private fun EmptyState(filter: BibliothequeFilter, modifier: Modifier = Modifier
 private fun BibliothequeContentPreview() {
     val media = listOf(
         Media(id = "1", title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.EN_COURS, releaseYear = 1997),
-        Media(id = "2", title = "Severance", type = MediaType.SERIE, status = WatchStatus.VU, releaseYear = 2022),
+        Media(id = "2", title = "Severance", type = MediaType.SERIE, status = WatchStatus.VU, releaseYear = 2022, watchedAt = 1_726_000_000_000L),
         Media(id = "3", title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, releaseYear = 2021),
     )
     PelliculeTheme {
@@ -267,8 +325,35 @@ private fun BibliothequeContentPreview() {
                 visibleMedia = media,
                 selectedFilter = BibliothequeFilter.TOUS,
                 filterCounts = countByFilter(media),
+                availableWatchedYears = availableWatchedYears(media),
             ),
             onFilterSelected = {},
+            onWatchedYearSelected = {},
+            onMediaClick = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A0812)
+@Composable
+private fun BibliothequeVuAvecAnneesPreview() {
+    val media = listOf(
+        Media(id = "1", title = "Game of Thrones", type = MediaType.SERIE, status = WatchStatus.VU, releaseYear = 2011, watchedAt = 1_726_000_000_000L),
+        Media(id = "2", title = "Severance", type = MediaType.SERIE, status = WatchStatus.VU, releaseYear = 2022, watchedAt = 1_726_000_000_000L),
+        Media(id = "3", title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.VU, releaseYear = 1997, watchedAt = 1_694_000_000_000L),
+    )
+    PelliculeTheme {
+        BibliothequeContent(
+            uiState = BibliothequeUiState(
+                isLoading = false,
+                visibleMedia = media,
+                selectedFilter = BibliothequeFilter.VU,
+                filterCounts = countByFilter(media),
+                availableWatchedYears = availableWatchedYears(media),
+                selectedWatchedYear = null,
+            ),
+            onFilterSelected = {},
+            onWatchedYearSelected = {},
             onMediaClick = {},
         )
     }
@@ -281,6 +366,7 @@ private fun BibliothequeEmptyPreview() {
         BibliothequeContent(
             uiState = BibliothequeUiState(isLoading = false, selectedFilter = BibliothequeFilter.VU),
             onFilterSelected = {},
+            onWatchedYearSelected = {},
             onMediaClick = {},
         )
     }

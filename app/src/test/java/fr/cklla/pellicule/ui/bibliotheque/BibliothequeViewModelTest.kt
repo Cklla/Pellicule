@@ -55,4 +55,57 @@ class BibliothequeViewModelTest {
 
         collectorJob.cancel()
     }
+
+    @Test
+    fun `filtrer Vu par annee ne montre que les contenus visionnes cette annee-la`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        repository.addMedia(Media(title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.VU))
+        repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR))
+
+        val viewModel = BibliothequeViewModel(repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onFilterSelected(BibliothequeFilter.VU)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val currentYear = watchedYear(viewModel.uiState.value.visibleMedia.first())
+        viewModel.onWatchedYearSelected(currentYear)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        var state = viewModel.uiState.value
+        assertEquals(1, state.visibleMedia.size)
+        assertEquals("Perfect Blue", state.visibleMedia.first().title)
+        assertEquals(currentYear, state.selectedWatchedYear)
+
+        // Re-cliquer sur la même année désélectionne (retour à "Toutes les années").
+        viewModel.onWatchedYearSelected(currentYear)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        state = viewModel.uiState.value
+        assertEquals(null, state.selectedWatchedYear)
+        assertEquals(1, state.visibleMedia.size)
+
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `changer de filtre de statut reinitialise l'annee selectionnee`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        repository.addMedia(Media(title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.VU))
+
+        val viewModel = BibliothequeViewModel(repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onFilterSelected(BibliothequeFilter.VU)
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onWatchedYearSelected(watchedYear(viewModel.uiState.value.visibleMedia.first()))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onFilterSelected(BibliothequeFilter.TOUS)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(null, viewModel.uiState.value.selectedWatchedYear)
+
+        collectorJob.cancel()
+    }
 }

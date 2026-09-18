@@ -21,6 +21,7 @@ class FirestoreMappersTest {
             posterUrl = "https://example.com/poster.jpg",
             jellyfinId = "jf-42",
             rating = 5,
+            watchedAt = 1_700_000_000_000L,
         )
 
         val roundTripped = mapToMedia(media.id, media.toFirestoreMap())
@@ -45,6 +46,7 @@ class FirestoreMappersTest {
             "tmdbId" to 123L,
             "releaseYear" to 2024L,
             "rating" to 4L,
+            "watchedAt" to 1_700_000_000_000L,
         )
 
         val media = mapToMedia("1", data)
@@ -52,6 +54,7 @@ class FirestoreMappersTest {
         assertEquals(123L, media?.tmdbId)
         assertEquals(2024, media?.releaseYear)
         assertEquals(4, media?.rating)
+        assertEquals(1_700_000_000_000L, media?.watchedAt)
     }
 
     @Test
@@ -94,6 +97,7 @@ class FirestoreMappersTest {
         assertNull(media?.posterUrl)
         assertNull(media?.jellyfinId)
         assertNull(media?.rating)
+        assertNull(media?.watchedAt)
     }
 
     @Test

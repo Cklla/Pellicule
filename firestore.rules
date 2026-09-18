@@ -23,7 +23,7 @@ service cloud.firestore {
     function isValidMedia(media) {
       return media.keys().hasOnly([
                'title', 'type', 'status', 'tmdbId', 'releaseYear', 'posterUrl', 'jellyfinId',
-               'rating'
+               'rating', 'watchedAt'
              ])
              && media.keys().hasAll(['title', 'type', 'status'])
              && media.title is string && media.title.size() <= 300
@@ -32,6 +32,9 @@ service cloud.firestore {
              && isIntBetween(media, 'tmdbId', 0, 9999999999)
              && isIntBetween(media, 'releaseYear', 1850, 2999)
              && isIntBetween(media, 'rating', 1, 5)
+             // Epoch millis : borne haute large (an 3000) plutôt qu'un "maintenant" figé, qui
+             // rendrait ces règles obsolètes avec le temps.
+             && isIntBetween(media, 'watchedAt', 0, 32503680000000)
              && isStringUpTo(media, 'posterUrl', 2000)
              && isStringUpTo(media, 'jellyfinId', 200);
     }

@@ -23,4 +23,5 @@ data class MediaEntity(
     val posterUrl: String?,
     val jellyfinId: String? = null,
     val rating: Int? = null,
+    val watchedAt: Long? = null,
 )

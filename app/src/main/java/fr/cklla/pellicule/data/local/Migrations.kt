@@ -39,3 +39,16 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         connection.execSQL("ALTER TABLE `media` ADD COLUMN `rating` INTEGER")
     }
 }
+
+/**
+ * Ajoute l'horodatage du passage au statut "vu", pour permettre le filtre par année de
+ * visionnage sur la Bibliothèque. Additive uniquement : un contenu déjà marqué "vu" avant cette
+ * migration démarre avec `watchedAt` à `NULL` (date de visionnage historique inconnue), il reste
+ * visible sous le filtre "Vu" mais n'apparaît sous aucun filtre par année tant que son statut n'est
+ * pas de nouveau modifié.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `media` ADD COLUMN `watchedAt` INTEGER")
+    }
+}
