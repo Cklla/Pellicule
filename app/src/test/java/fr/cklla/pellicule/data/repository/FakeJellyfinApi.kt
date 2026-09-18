@@ -15,6 +15,9 @@ class FakeJellyfinApi : JellyfinApi {
     var authError: Throwable? = null
     var items: List<JellyfinItemDto> = emptyList()
 
+    /** Lancée par [getItems] et [getSeriesEpisodes], pour simuler un token révoqué/expiré (401) ou une autre erreur réseau. */
+    var error: Throwable? = null
+
     /** Épisodes par id de série Jellyfin, extrait de l'URL `.../Shows/{seriesId}/Episodes`. */
     var episodesBySeriesId: Map<String, List<JellyfinEpisodeDto>> = emptyMap()
 
@@ -32,9 +35,13 @@ class FakeJellyfinApi : JellyfinApi {
         includeItemTypes: String,
         recursive: Boolean,
         fields: String,
-    ): JellyfinItemsResponseDto = JellyfinItemsResponseDto(items)
+    ): JellyfinItemsResponseDto {
+        error?.let { throw it }
+        return JellyfinItemsResponseDto(items)
+    }
 
     override suspend fun getSeriesEpisodes(url: String, authHeader: String, userId: String, fields: String): JellyfinEpisodesResponseDto {
+        error?.let { throw it }
         val seriesId = url.substringAfter("/Shows/").substringBefore("/Episodes")
         return JellyfinEpisodesResponseDto(episodesBySeriesId[seriesId].orEmpty())
     }

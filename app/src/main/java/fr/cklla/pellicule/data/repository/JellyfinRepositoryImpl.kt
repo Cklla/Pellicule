@@ -14,6 +14,7 @@ import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
+import retrofit2.HttpException
 
 /**
  * Implémentation [JellyfinRepository] : auth par login utilisateur, résolution des items par
@@ -57,7 +58,7 @@ class JellyfinRepositoryImpl @Inject constructor(
     override suspend fun syncTrackedSeries(items: List<Media>) {
         val current = session.value ?: return
         items.filter { it.type == MediaType.SERIE || it.type == MediaType.ANIME }
-            .forEach { media -> runCatching { syncSeries(current, media) } }
+            .forEach { media -> runCatching { syncSeries(current, media) }.onFailure(::disconnectIfUnauthorized) }
     }
 
     private suspend fun syncSeries(current: JellyfinSession, media: Media) {
@@ -120,7 +121,7 @@ class JellyfinRepositoryImpl @Inject constructor(
                     mediaRepository.updateMedia(media.copy(jellyfinId = item.id, status = newStatus))
                 }
             }
-        }
+        }.onFailure(::disconnectIfUnauthorized)
     }
 
     override suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean) {
@@ -139,6 +140,17 @@ class JellyfinRepositoryImpl @Inject constructor(
             } else {
                 jellyfinApi.markUnplayed(url, authHeader(current.accessToken))
             }
+        }.onFailure(::disconnectIfUnauthorized)
+    }
+
+    /**
+     * Un 401 sur un appel authentifié signifie que le token n'est plus valide côté serveur (révoqué,
+     * expiré) : on efface la session locale pour repasser l'app en "déconnecté" plutôt que de
+     * continuer à échouer silencieusement à chaque synchro sans jamais le signaler à l'utilisateur.
+     */
+    private fun disconnectIfUnauthorized(error: Throwable) {
+        if (error is HttpException && error.code() == 401) {
+            sessionStore.clear()
         }
     }
 

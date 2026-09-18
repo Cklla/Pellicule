@@ -13,11 +13,18 @@ import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.WatchStatus
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import retrofit2.HttpException
+import retrofit2.Response
+
+private fun unauthorizedException() =
+    HttpException(Response.error<Any>(401, "".toResponseBody("text/plain".toMediaType())))
 
 class JellyfinRepositoryImplTest {
 
@@ -232,6 +239,57 @@ class JellyfinRepositoryImplTest {
         assertEquals(1, api.playedUrls.size)
         assertTrue(api.playedUrls.first().contains("jf-ep-1"))
         assertTrue(api.unplayedUrls.isEmpty())
+    }
+
+    @Test
+    fun `syncTrackedSeries efface la session locale sur un 401`() = runTest {
+        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        mediaRepository.addMedia(Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396))
+        val api = FakeJellyfinApi().apply { error = unauthorizedException() }
+        val sessionStore = FakeJellyfinSessionStore(session)
+        val repository = repository(api, sessionStore, mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertNull(sessionStore.session.first())
+    }
+
+    @Test
+    fun `syncTrackedMovies efface la session locale sur un 401`() = runTest {
+        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        mediaRepository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631))
+        val api = FakeJellyfinApi().apply { error = unauthorizedException() }
+        val sessionStore = FakeJellyfinSessionStore(session)
+        val repository = repository(api, sessionStore, mediaRepository)
+
+        repository.syncTrackedMovies(mediaRepository.observeMedia().first())
+
+        assertNull(sessionStore.session.first())
+    }
+
+    @Test
+    fun `syncTrackedSeries garde la session sur une erreur reseau autre qu'un 401`() = runTest {
+        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        mediaRepository.addMedia(Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396))
+        val api = FakeJellyfinApi().apply { error = RuntimeException("timeout") }
+        val sessionStore = FakeJellyfinSessionStore(session)
+        val repository = repository(api, sessionStore, mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertNotNull(sessionStore.session.first())
+    }
+
+    @Test
+    fun `pushEpisodeWatched efface la session locale sur un 401`() = runTest {
+        val media = Media(id = "media-1", title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, jellyfinId = "jf-series-1")
+        val api = FakeJellyfinApi().apply { error = unauthorizedException() }
+        val sessionStore = FakeJellyfinSessionStore(session)
+        val repository = repository(api, sessionStore)
+
+        repository.pushEpisodeWatched(media, seasonNumber = 1, episodeNumber = 1, watched = true)
+
+        assertNull(sessionStore.session.first())
     }
 
     @Test
