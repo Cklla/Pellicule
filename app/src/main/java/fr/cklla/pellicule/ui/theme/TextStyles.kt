@@ -6,11 +6,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Styles de texte "one-off" repris de Cartouche, en dehors de l'échelle Material3 classique. Les
- * couleurs qui dépendent d'un état (actif/inactif, couleur de statut) restent en dehors de ces
- * styles et sont passées au paramètre `color` de `Text` au cas par cas. Non exhaustif : seuls les
- * styles utilisés par le squelette actuel sont repris, les autres seront ajoutés au fil des
- * écrans (voir WORK.md).
+ * Styles de texte "one-off", en dehors de l'échelle Material3 classique. Les couleurs qui
+ * dépendent d'un état (actif/inactif, couleur de statut) restent en dehors de ces styles et sont
+ * passées au paramètre `color` de `Text` au cas par cas. Non exhaustif : les styles s'ajoutent au
+ * fil des écrans.
  */
 object PelliculeTextStyles {
 
@@ -25,6 +24,46 @@ object PelliculeTextStyles {
         fontFamily = InterFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 23.sp,
+    )
+
+    val chipLabel = TextStyle(
+        fontFamily = InterFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 13.sp,
+    )
+
+    val cardTitle = TextStyle(
+        fontFamily = InterFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.5.sp,
+    )
+
+    val cardSubtitle = TextStyle(
+        fontFamily = InterFamily,
+        fontSize = 12.sp,
+    )
+
+    val badgeLabel = TextStyle(
+        fontFamily = InterFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 10.5.sp,
+        letterSpacing = 0.5.sp,
+    )
+
+    val coverLetter = TextStyle(
+        fontFamily = FrauncesItalic,
+        fontWeight = FontWeight.SemiBold,
+        fontStyle = FontStyle.Italic,
+        fontSize = 28.sp,
+    )
+
+    // Lettre en filigrane des jaquettes en carte liste (Bibliothèque), plus grande que celle des
+    // résultats de recherche.
+    val coverLetterListCard = TextStyle(
+        fontFamily = FrauncesItalic,
+        fontWeight = FontWeight.SemiBold,
+        fontStyle = FontStyle.Italic,
+        fontSize = 34.sp,
     )
 
     val emptyTitle = TextStyle(

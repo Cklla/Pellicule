@@ -47,8 +47,8 @@ class MainActivity : ComponentActivity() {
 
 // Navigation Compose : les 3 onglets sont des destinations de premier niveau (une seule instance
 // de chacune, état conservé via saveState/restoreState). Pas de gate de connexion pour l'instant
-// (Firebase Auth pas encore câblé côté Pellicule, voir WORK.md) : l'app démarre directement sur
-// la Bibliothèque, conformément à la contrainte CLAUDE.md d'utilisabilité sans compte/serveur.
+// (Firebase Auth pas encore câblé) : l'app démarre directement sur la Bibliothèque, utilisable
+// sans compte ni serveur.
 @Composable
 fun PelliculeApp() {
     val navController = rememberNavController()

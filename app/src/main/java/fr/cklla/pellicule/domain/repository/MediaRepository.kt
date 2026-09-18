@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * Le ViewModel ne connaît que cette interface : il ignore si les contenus viennent de Room, de
  * Firestore ou d'un cache mémoire. L'implémentation (voir `data.repository.MediaRepositoryImpl`)
- * orchestre Room seul pour l'instant ; la synchro Firestore viendra s'y ajouter (voir WORK.md).
+ * orchestre Room seul pour l'instant ; la synchro Firestore viendra s'y ajouter.
  */
 interface MediaRepository {
 

@@ -17,8 +17,7 @@ import fr.cklla.pellicule.ui.theme.PelliculeTextStyles
 import fr.cklla.pellicule.ui.theme.TextMuted
 import fr.cklla.pellicule.ui.theme.TextPrimary
 
-/** Écran Stats : vue d'ensemble de la progression, à construire (voir WORK.md). Placeholder pour
- * l'instant. */
+/** Écran Stats : vue d'ensemble de la progression, à construire. Placeholder pour l'instant. */
 @Composable
 fun StatsScreen() {
     Column(

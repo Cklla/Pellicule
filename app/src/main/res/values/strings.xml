@@ -2,9 +2,29 @@
     <string name="app_name">Pellicule</string>
 
     <!-- Bibliothèque -->
+    <string name="bibliotheque_kicker">carnet de visionnage</string>
     <string name="bibliotheque_title">Bibliothèque</string>
+    <string name="filter_chip_label">%1$s (%2$d)</string>
+    <string name="media_card_type_year">%1$s · %2$s</string>
+    <string name="media_card_year_unknown">année inconnue</string>
+
+    <!-- Types de contenu -->
+    <string name="media_type_film">Film</string>
+    <string name="media_type_serie">Série</string>
+    <string name="media_type_anime">Anime</string>
+
+    <!-- Statuts (réutilisés pour les chips de filtre et les badges de statut) -->
+    <string name="filter_tous">Tous</string>
+    <string name="filter_a_voir">À voir</string>
+    <string name="filter_en_cours">En cours</string>
+    <string name="filter_vu">Vu</string>
+
+    <!-- État vide de la bibliothèque, message selon le filtre actif -->
     <string name="empty_title">Rien par ici</string>
-    <string name="empty_message_bibliotheque">Ton suivi est vide pour l\'instant. Ajoute un premier film, une série ou un anime depuis la recherche.</string>
+    <string name="empty_message_tous">Ton suivi est vide. Ajoute un premier film, une série ou un anime depuis la recherche.</string>
+    <string name="empty_message_a_voir">Rien à voir pour l\'instant — direction la recherche pour en ajouter.</string>
+    <string name="empty_message_en_cours">Rien en cours de visionnage en ce moment.</string>
+    <string name="empty_message_vu">Tu n\'as encore rien vu.</string>
 
     <!-- Navigation basse -->
     <string name="nav_recherche">Recherche</string>

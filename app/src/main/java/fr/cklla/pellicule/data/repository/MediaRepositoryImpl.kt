@@ -13,9 +13,9 @@ import kotlinx.coroutines.flow.map
 /**
  * Implémentation Room du [MediaRepository].
  *
- * Room-only pour l'instant : pas de synchro Firestore tant que le projet Firebase n'a pas été
- * câblé côté Pellicule (voir WORK.md). Ce repository suit le même schéma que celui de Cartouche
- * pour que l'ajout de la synchro plus tard n'en change pas l'interface publique.
+ * Room-only pour l'instant : pas de synchro Firestore tant que le projet Firebase n'est pas
+ * câblé côté app. L'interface [MediaRepository] est déjà pensée pour que l'ajout de la synchro
+ * plus tard n'en change pas la signature publique.
  */
 class MediaRepositoryImpl @Inject constructor(
     private val mediaDao: MediaDao,

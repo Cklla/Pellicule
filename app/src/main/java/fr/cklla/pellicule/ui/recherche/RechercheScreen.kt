@@ -17,7 +17,7 @@ import fr.cklla.pellicule.ui.theme.PelliculeTextStyles
 import fr.cklla.pellicule.ui.theme.TextMuted
 import fr.cklla.pellicule.ui.theme.TextPrimary
 
-/** Écran Recherche : branchement TMDB à venir (voir WORK.md). Placeholder pour l'instant. */
+/** Écran Recherche : branchement TMDB à venir. Placeholder pour l'instant. */
 @Composable
 fun RechercheScreen() {
     Column(
