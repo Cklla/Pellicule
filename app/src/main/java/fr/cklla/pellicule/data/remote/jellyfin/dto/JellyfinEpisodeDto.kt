@@ -19,7 +19,10 @@ data class JellyfinEpisodeDto(
     @Json(name = "UserData") val userData: JellyfinUserDataDto? = null,
 )
 
+/** Statut de lecture, présent aussi bien sur un épisode que sur un item de bibliothèque (film). */
 @JsonClass(generateAdapter = true)
 data class JellyfinUserDataDto(
     @Json(name = "Played") val played: Boolean = false,
+    /** Position de lecture en ticks (10 000 ticks = 1 ms) — `> 0` signale un visionnage entamé mais pas terminé. */
+    @Json(name = "PlaybackPositionTicks") val playbackPositionTicks: Long = 0,
 )

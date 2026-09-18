@@ -8,6 +8,7 @@ import fr.cklla.pellicule.domain.model.JellyfinSession
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
+import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
@@ -61,6 +62,10 @@ class JellyfinRepositoryImpl @Inject constructor(
 
     private suspend fun syncSeries(current: JellyfinSession, media: Media) {
         val jellyfinId = resolveJellyfinId(current, media) ?: return
+        // `media` peut avoir un `jellyfinId` pas encore à jour (résolu à l'instant par
+        // `resolveJellyfinId`) : on repart de cette version pour ne pas écraser la valeur qu'on
+        // vient de persister lors de la mise à jour du statut plus bas.
+        val resolvedMedia = media.copy(jellyfinId = jellyfinId)
         val episodes = jellyfinApi.getSeriesEpisodes(
             url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
             authHeader = authHeader(current.accessToken),
@@ -75,6 +80,47 @@ class JellyfinRepositoryImpl @Inject constructor(
             }
             .toSet()
         episodeRepository.replaceWatchedEpisodes(media.id, watched)
+
+        // Liste vide = pas d'info exploitable (série non trouvée côté Jellyfin, ou réponse
+        // incomplète) : on laisse le statut local tel quel plutôt que de le remettre à "à voir".
+        if (episodes.isEmpty()) return
+        val newStatus = when {
+            watched.size >= episodes.size -> WatchStatus.VU
+            watched.isNotEmpty() -> WatchStatus.EN_COURS
+            else -> WatchStatus.A_VOIR
+        }
+        if (newStatus != resolvedMedia.status) {
+            mediaRepository.updateMedia(resolvedMedia.copy(status = newStatus))
+        }
+    }
+
+    override suspend fun syncTrackedMovies(items: List<Media>) {
+        val current = session.value ?: return
+        val movies = items.filter { it.type == MediaType.FILM && it.tmdbId != null }
+        if (movies.isEmpty()) return
+        runCatching {
+            val jellyfinItems = jellyfinApi.getItems(
+                url = JellyfinApi.itemsUrl(current.serverUrl, current.userId),
+                authHeader = authHeader(current.accessToken),
+                includeItemTypes = "Movie",
+                fields = "ProviderIds,UserData",
+            ).items
+            val itemByTmdbId = jellyfinItems
+                .mapNotNull { item -> item.providerIds?.get("Tmdb")?.toLongOrNull()?.let { it to item } }
+                .toMap()
+
+            movies.forEach { media ->
+                val item = itemByTmdbId[media.tmdbId] ?: return@forEach
+                val newStatus = when {
+                    item.userData?.played == true -> WatchStatus.VU
+                    (item.userData?.playbackPositionTicks ?: 0L) > 0L -> WatchStatus.EN_COURS
+                    else -> WatchStatus.A_VOIR
+                }
+                if (item.id != media.jellyfinId || newStatus != media.status) {
+                    mediaRepository.updateMedia(media.copy(jellyfinId = item.id, status = newStatus))
+                }
+            }
+        }
     }
 
     override suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean) {

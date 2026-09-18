@@ -17,6 +17,7 @@ class FakeJellyfinRepository : JellyfinRepository {
 
     var connectResult: Resource<Unit> = Resource.Success(Unit)
     val syncedItems = mutableListOf<List<Media>>()
+    val syncedMovies = mutableListOf<List<Media>>()
     val pushedEpisodes = mutableListOf<Triple<Media, EpisodeKey, Boolean>>()
 
     fun setSession(session: JellyfinSession?) {
@@ -36,6 +37,10 @@ class FakeJellyfinRepository : JellyfinRepository {
 
     override suspend fun syncTrackedSeries(items: List<Media>) {
         syncedItems.add(items)
+    }
+
+    override suspend fun syncTrackedMovies(items: List<Media>) {
+        syncedMovies.add(items)
     }
 
     override suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean) {

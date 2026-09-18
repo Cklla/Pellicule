@@ -84,6 +84,114 @@ class JellyfinRepositoryImplTest {
     }
 
     @Test
+    fun `syncTrackedSeries passe le statut a EN_COURS quand certains episodes sont vus`() = runTest {
+        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.A_VOIR, tmdbId = 95396),
+        ) as Resource.Success).data
+
+        val api = FakeJellyfinApi().apply {
+            items = listOf(JellyfinItemDto(id = "jf-series-1", providerIds = mapOf("Tmdb" to "95396")))
+            episodesBySeriesId = mapOf(
+                "jf-series-1" to listOf(
+                    JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 1, episodeNumber = 1, userData = JellyfinUserDataDto(played = true)),
+                    JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 1, episodeNumber = 2, userData = JellyfinUserDataDto(played = false)),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        val updatedMedia = mediaRepository.observeMediaById(mediaId).first()
+        assertEquals(WatchStatus.EN_COURS, updatedMedia?.status)
+        assertEquals("jf-series-1", updatedMedia?.jellyfinId)
+    }
+
+    @Test
+    fun `syncTrackedSeries passe le statut a VU quand tous les episodes sont vus`() = runTest {
+        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
+        ) as Resource.Success).data
+
+        val api = FakeJellyfinApi().apply {
+            items = listOf(JellyfinItemDto(id = "jf-series-1", providerIds = mapOf("Tmdb" to "95396")))
+            episodesBySeriesId = mapOf(
+                "jf-series-1" to listOf(
+                    JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 1, episodeNumber = 1, userData = JellyfinUserDataDto(played = true)),
+                    JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 1, episodeNumber = 2, userData = JellyfinUserDataDto(played = true)),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertEquals(WatchStatus.VU, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
+    fun `syncTrackedMovies passe le statut a EN_COURS puis VU selon Jellyfin`() = runTest {
+        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631),
+        ) as Resource.Success).data
+
+        val api = FakeJellyfinApi().apply {
+            items = listOf(
+                JellyfinItemDto(
+                    id = "jf-movie-1",
+                    providerIds = mapOf("Tmdb" to "438631"),
+                    userData = JellyfinUserDataDto(played = false, playbackPositionTicks = 12_000_000),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedMovies(mediaRepository.observeMedia().first())
+
+        val afterStart = mediaRepository.observeMediaById(mediaId).first()
+        assertEquals(WatchStatus.EN_COURS, afterStart?.status)
+        assertEquals("jf-movie-1", afterStart?.jellyfinId)
+
+        api.items = listOf(
+            JellyfinItemDto(id = "jf-movie-1", providerIds = mapOf("Tmdb" to "438631"), userData = JellyfinUserDataDto(played = true)),
+        )
+        repository.syncTrackedMovies(mediaRepository.observeMedia().first())
+
+        assertEquals(WatchStatus.VU, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
+    fun `syncTrackedMovies ignore les series`() = runTest {
+        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        mediaRepository.addMedia(Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.A_VOIR, tmdbId = 95396))
+        val api = FakeJellyfinApi()
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedMovies(mediaRepository.observeMedia().first())
+
+        assertTrue(api.items.isEmpty())
+    }
+
+    @Test
+    fun `syncTrackedMovies ne fait rien sans session active`() = runTest {
+        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631),
+        ) as Resource.Success).data
+        val api = FakeJellyfinApi().apply {
+            items = listOf(JellyfinItemDto(id = "jf-movie-1", providerIds = mapOf("Tmdb" to "438631"), userData = JellyfinUserDataDto(played = true)))
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(initial = null), mediaRepository)
+
+        repository.syncTrackedMovies(mediaRepository.observeMedia().first())
+
+        assertEquals(WatchStatus.A_VOIR, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
     fun `syncTrackedSeries ignore les films`() = runTest {
         val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
         mediaRepository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 1))

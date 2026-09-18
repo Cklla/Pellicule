@@ -10,11 +10,14 @@ data class JellyfinItemsResponseDto(
 )
 
 /**
- * Un item de bibliothèque (série, film...), utilisé ici uniquement pour résoudre l'id Jellyfin
- * d'une série suivie à partir de son id TMDB (voir [providerIds], clé `"Tmdb"`).
+ * Un item de bibliothèque (série, film...). Sert à résoudre l'id Jellyfin d'un contenu suivi à
+ * partir de son id TMDB (voir [providerIds], clé `"Tmdb"`), et pour les films, à lire directement
+ * le statut de lecture ([userData]) — contrairement aux séries, un film n'a pas de sous-item
+ * "épisode" à interroger séparément.
  */
 @JsonClass(generateAdapter = true)
 data class JellyfinItemDto(
     @Json(name = "Id") val id: String,
     @Json(name = "ProviderIds") val providerIds: Map<String, String>? = null,
+    @Json(name = "UserData") val userData: JellyfinUserDataDto? = null,
 )

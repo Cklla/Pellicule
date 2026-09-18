@@ -32,6 +32,7 @@ class AppSyncViewModel @Inject constructor(
             syncMutex.withLock {
                 val items = mediaRepository.observeMedia().first()
                 jellyfinRepository.syncTrackedSeries(items)
+                jellyfinRepository.syncTrackedMovies(items)
             }
         }
     }
