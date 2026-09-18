@@ -5,7 +5,7 @@ import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
 import fr.cklla.pellicule.data.repository.FakeEpisodeDao
 import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
 import fr.cklla.pellicule.data.repository.FakeMediaDao
-import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
+import fr.cklla.pellicule.data.repository.fakeMediaRepository
 import fr.cklla.pellicule.domain.model.EpisodeInfo
 import fr.cklla.pellicule.domain.model.JellyfinSession
 import fr.cklla.pellicule.domain.model.Media
@@ -15,6 +15,7 @@ import fr.cklla.pellicule.domain.model.Season
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
+import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,7 +50,7 @@ class DetailViewModelTest {
 
     private fun viewModelFor(
         mediaId: String,
-        mediaRepository: MediaRepositoryImpl,
+        mediaRepository: MediaRepository,
         tvDetailsRepository: FakeTvDetailsRepository = FakeTvDetailsRepository(),
         episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
@@ -64,7 +65,7 @@ class DetailViewModelTest {
     )
 
     private fun previewViewModelFor(
-        mediaRepository: MediaRepositoryImpl,
+        mediaRepository: MediaRepository,
         tmdbId: Long = 42,
         title: String = "Severance",
         type: String = "SERIE",
@@ -93,7 +94,7 @@ class DetailViewModelTest {
 
     @Test
     fun `changer le statut persiste la mise a jour`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR))
         val mediaId = (addResult as Resource.Success).data
 
@@ -110,7 +111,7 @@ class DetailViewModelTest {
 
     @Test
     fun `retirer le contenu vide la fiche`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR))
         val mediaId = (addResult as Resource.Success).data
 
@@ -127,7 +128,7 @@ class DetailViewModelTest {
 
     @Test
     fun `ouvrir une fiche suivie charge son synopsis`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 1))
         val mediaId = (addResult as Resource.Success).data
         val synopsisRepository = FakeSynopsisRepository().apply { response = Resource.Success("Paul Atréides...") }
@@ -142,7 +143,7 @@ class DetailViewModelTest {
 
     @Test
     fun `ouvrir un apercu charge aussi son synopsis`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val synopsisRepository = FakeSynopsisRepository().apply { response = Resource.Success("Un employé découpe son esprit...") }
         val viewModel = previewViewModelFor(repository, tmdbId = 42, synopsisRepository = synopsisRepository)
         val collectorJob = launch { viewModel.uiState.collect {} }
@@ -154,7 +155,7 @@ class DetailViewModelTest {
 
     @Test
     fun `un FILM n'a pas de section episodes`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(
             Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 1),
         )
@@ -171,7 +172,7 @@ class DetailViewModelTest {
 
     @Test
     fun `ouvrir une serie charge les saisons et selectionne la premiere saison reguliere`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(
             Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
         )
@@ -203,7 +204,7 @@ class DetailViewModelTest {
 
     @Test
     fun `marquer un episode vu met a jour son statut dans l'etat`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(
             Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
         )
@@ -228,7 +229,7 @@ class DetailViewModelTest {
 
     @Test
     fun `changer de saison recharge les episodes de la saison choisie`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(
             Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
         )
@@ -261,7 +262,7 @@ class DetailViewModelTest {
 
     @Test
     fun `ouvrir un apercu depuis la recherche n'est pas dans le suivi`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val viewModel = previewViewModelFor(repository, tmdbId = 42, title = "Severance", year = "2022")
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()
@@ -276,7 +277,7 @@ class DetailViewModelTest {
 
     @Test
     fun `un apercu sans tmdbId valide n'a pas de contenu`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val viewModel = DetailViewModel(
             savedStateHandle = SavedStateHandle(emptyMap()),
             mediaRepository = repository,
@@ -294,7 +295,7 @@ class DetailViewModelTest {
 
     @Test
     fun `ajouter depuis l'apercu persiste le contenu et bascule dans le suivi`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val viewModel = previewViewModelFor(repository, tmdbId = 42)
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()
@@ -311,7 +312,7 @@ class DetailViewModelTest {
 
     @Test
     fun `ajouter une serie depuis l'apercu charge la section episodes`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val tvDetailsRepository = FakeTvDetailsRepository().apply {
             seasonsResponse = Resource.Success(listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 1, posterUrl = null)))
             defaultEpisodesResponse = Resource.Success(
@@ -334,7 +335,7 @@ class DetailViewModelTest {
 
     @Test
     fun `marquer un episode vu pousse vers Jellyfin quand une session est active`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(
             Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
         )
@@ -367,7 +368,7 @@ class DetailViewModelTest {
 
     @Test
     fun `marquer un episode vu ne pousse rien sans session Jellyfin`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(
             Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
         )

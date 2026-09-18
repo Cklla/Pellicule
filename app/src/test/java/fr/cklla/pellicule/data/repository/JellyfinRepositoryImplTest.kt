@@ -11,6 +11,7 @@ import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.WatchStatus
+import fr.cklla.pellicule.domain.repository.MediaRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
@@ -33,7 +34,7 @@ class JellyfinRepositoryImplTest {
     private fun repository(
         api: FakeJellyfinApi = FakeJellyfinApi(),
         sessionStore: FakeJellyfinSessionStore = FakeJellyfinSessionStore(),
-        mediaRepository: MediaRepositoryImpl = MediaRepositoryImpl(FakeMediaDao()),
+        mediaRepository: MediaRepository = fakeMediaRepository(FakeMediaDao()),
         episodeRepository: EpisodeRepositoryImpl = EpisodeRepositoryImpl(FakeEpisodeDao()),
     ) = JellyfinRepositoryImpl(api, sessionStore, mediaRepository, episodeRepository)
 
@@ -66,7 +67,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedSeries resout l'id Jellyfin et reconcilie les episodes vus`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val mediaId = (mediaRepository.addMedia(
             Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
         ) as Resource.Success).data
@@ -92,7 +93,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedSeries passe le statut a EN_COURS quand certains episodes sont vus`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val mediaId = (mediaRepository.addMedia(
             Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.A_VOIR, tmdbId = 95396),
         ) as Resource.Success).data
@@ -117,7 +118,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedSeries passe le statut a VU quand tous les episodes sont vus`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val mediaId = (mediaRepository.addMedia(
             Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
         ) as Resource.Success).data
@@ -140,7 +141,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedMovies passe le statut a EN_COURS puis VU selon Jellyfin`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val mediaId = (mediaRepository.addMedia(
             Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631),
         ) as Resource.Success).data
@@ -172,7 +173,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedMovies ignore les series`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         mediaRepository.addMedia(Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.A_VOIR, tmdbId = 95396))
         val api = FakeJellyfinApi()
         val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
@@ -184,7 +185,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedMovies ne fait rien sans session active`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val mediaId = (mediaRepository.addMedia(
             Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631),
         ) as Resource.Success).data
@@ -200,7 +201,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedSeries ignore les films`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         mediaRepository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 1))
         val api = FakeJellyfinApi()
         val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
@@ -212,7 +213,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedSeries ne fait rien sans session active`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         mediaRepository.addMedia(Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396))
         val api = FakeJellyfinApi().apply {
             items = listOf(JellyfinItemDto(id = "jf-series-1", providerIds = mapOf("Tmdb" to "95396")))
@@ -243,7 +244,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedSeries efface la session locale sur un 401`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         mediaRepository.addMedia(Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396))
         val api = FakeJellyfinApi().apply { error = unauthorizedException() }
         val sessionStore = FakeJellyfinSessionStore(session)
@@ -256,7 +257,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedMovies efface la session locale sur un 401`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         mediaRepository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631))
         val api = FakeJellyfinApi().apply { error = unauthorizedException() }
         val sessionStore = FakeJellyfinSessionStore(session)
@@ -269,7 +270,7 @@ class JellyfinRepositoryImplTest {
 
     @Test
     fun `syncTrackedSeries garde la session sur une erreur reseau autre qu'un 401`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         mediaRepository.addMedia(Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396))
         val api = FakeJellyfinApi().apply { error = RuntimeException("timeout") }
         val sessionStore = FakeJellyfinSessionStore(session)

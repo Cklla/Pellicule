@@ -6,6 +6,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import fr.cklla.pellicule.data.local.JellyfinSessionStore
 import fr.cklla.pellicule.data.local.JellyfinSessionStoreImpl
+import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSource
+import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSourceImpl
 import fr.cklla.pellicule.data.repository.AuthRepositoryImpl
 import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
 import fr.cklla.pellicule.data.repository.JellyfinRepositoryImpl
@@ -59,4 +61,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAuthRepository(impl: AuthRepositoryImpl): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindFirestoreMediaDataSource(impl: FirestoreMediaDataSourceImpl): FirestoreMediaDataSource
 }

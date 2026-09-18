@@ -1,7 +1,7 @@
 package fr.cklla.pellicule.ui.bibliotheque
 
 import fr.cklla.pellicule.data.repository.FakeMediaDao
-import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
+import fr.cklla.pellicule.data.repository.fakeMediaRepository
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.WatchStatus
@@ -34,7 +34,7 @@ class BibliothequeViewModelTest {
 
     @Test
     fun `selectionner un filtre restreint la liste visible sans affecter les compteurs`() = runTest {
-        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val repository = fakeMediaRepository(FakeMediaDao())
         repository.addMedia(Media(title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.VU))
         repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR))
 

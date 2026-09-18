@@ -1,7 +1,7 @@
 package fr.cklla.pellicule.ui.recherche
 
 import fr.cklla.pellicule.data.repository.FakeMediaDao
-import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
+import fr.cklla.pellicule.data.repository.fakeMediaRepository
 import fr.cklla.pellicule.domain.model.MediaSearchResult
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
@@ -39,7 +39,7 @@ class RechercheViewModelTest {
 
     @Test
     fun `changer la recherche declenche un appel apres le debounce et expose les resultats`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val searchRepository = FakeMediaSearchRepository().apply {
             response = Resource.Success(listOf(sampleResult()))
         }
@@ -60,7 +60,7 @@ class RechercheViewModelTest {
 
     @Test
     fun `une recherche vide ne declenche aucun appel reseau`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val searchRepository = FakeMediaSearchRepository()
         val viewModel = RechercheViewModel(mediaRepository, searchRepository)
         val collectorJob = launch { viewModel.uiState.collect {} }
@@ -73,7 +73,7 @@ class RechercheViewModelTest {
 
     @Test
     fun `plusieurs frappes rapprochees ne declenchent qu'un seul appel reseau`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val searchRepository = FakeMediaSearchRepository().apply {
             response = Resource.Success(listOf(sampleResult()))
         }
@@ -93,7 +93,7 @@ class RechercheViewModelTest {
 
     @Test
     fun `une erreur reseau remonte comme message d'erreur sans resultat`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val searchRepository = FakeMediaSearchRepository().apply {
             response = Resource.Error("Impossible de contacter TMDB.")
         }
@@ -112,7 +112,7 @@ class RechercheViewModelTest {
 
     @Test
     fun `ajouter un resultat au suivi le fait apparaitre comme deja ajoute`() = runTest {
-        val mediaRepository = MediaRepositoryImpl(FakeMediaDao())
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val searchRepository = FakeMediaSearchRepository()
         val viewModel = RechercheViewModel(mediaRepository, searchRepository)
         val collectorJob = launch { viewModel.uiState.collect {} }

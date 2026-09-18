@@ -25,4 +25,10 @@ interface MediaDao {
 
     @Query("DELETE FROM media WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("SELECT id FROM media")
+    suspend fun getAllIds(): List<String>
+
+    @Query("DELETE FROM media")
+    suspend fun clearAll()
 }

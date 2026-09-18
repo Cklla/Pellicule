@@ -15,12 +15,16 @@ class FakeMediaDao : MediaDao {
 
     private val media = MutableStateFlow<List<MediaEntity>>(emptyList())
 
+    /** Permet de simuler un échec Room (contrainte violée, disque plein...) dans les tests. */
+    var shouldThrowOnInsert = false
+
     override fun observeAll(): Flow<List<MediaEntity>> = media
 
     override fun observeById(id: String): Flow<MediaEntity?> =
         media.map { list -> list.find { it.id == id } }
 
     override suspend fun insert(media: MediaEntity) {
+        if (shouldThrowOnInsert) error("Échec Room simulé")
         this.media.update { list -> list.filterNot { it.id == media.id } + media }
     }
 
@@ -30,5 +34,11 @@ class FakeMediaDao : MediaDao {
 
     override suspend fun deleteById(id: String) {
         media.update { list -> list.filterNot { it.id == id } }
+    }
+
+    override suspend fun getAllIds(): List<String> = media.value.map { it.id }
+
+    override suspend fun clearAll() {
+        media.update { emptyList() }
     }
 }
