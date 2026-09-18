@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Le trafic en clair reste autorisé par défaut : un serveur Jellyfin auto-hébergé tourne souvent
+  en http:// simple sur le réseau local, et son adresse n'est connue qu'à l'exécution (saisie par
+  l'utilisateur), donc impossible à déclarer nommément ici.
+
+  Les domaines TMDB, eux, sont connus à la compilation et servent exclusivement du HTTPS : les
+  interdire explicitement de trafic en clair garantit que ce trafic-là ne pourra jamais être
+  dégradé en HTTP, y compris par une redirection renvoyée par le serveur.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">themoviedb.org</domain>
+        <domain includeSubdomains="true">tmdb.org</domain>
+    </domain-config>
+</network-security-config>
