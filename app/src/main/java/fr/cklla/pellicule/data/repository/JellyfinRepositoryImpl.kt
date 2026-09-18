@@ -33,6 +33,14 @@ class JellyfinRepositoryImpl @Inject constructor(
 
     override suspend fun connect(serverUrl: String, username: String, password: String): Resource<Unit> {
         val normalizedUrl = serverUrl.trim().trimEnd('/')
+        // Les appels Jellyfin passent une URL absolue à Retrofit, qui retombe silencieusement sur
+        // sa base URL placeholder quand la chaîne reçue est relative : une saisie sans schéma
+        // ("192.168.1.10:8096") enverrait donc le mot de passe à un tout autre hôte que celui
+        // voulu. On refuse tout ce qui n'est pas explicitement http(s) plutôt que de tenter une
+        // correction automatique, qui masquerait une faute de frappe dans l'adresse.
+        if (!isSupportedServerUrl(normalizedUrl)) {
+            return Resource.Error("L'adresse du serveur doit commencer par http:// ou https://.")
+        }
         return runCatching {
             val response = jellyfinApi.authenticateByName(
                 url = JellyfinApi.authenticateByNameUrl(normalizedUrl),
@@ -167,6 +175,12 @@ class JellyfinRepositoryImpl @Inject constructor(
 
         mediaRepository.updateMedia(media.copy(jellyfinId = resolvedId))
         return resolvedId
+    }
+
+    /** Une adresse exploitable doit porter un schéma http(s) explicite et un hôte non vide. */
+    private fun isSupportedServerUrl(url: String): Boolean {
+        val scheme = url.substringBefore("://", missingDelimiterValue = "").lowercase()
+        return (scheme == "http" || scheme == "https") && url.substringAfter("://").isNotBlank()
     }
 
     /** Ce serveur exige le schéma `MediaBrowser` sur `Authorization` pour tous les appels, y compris authentifiés (`Token=`) — voir doc de [JellyfinApi]. */
