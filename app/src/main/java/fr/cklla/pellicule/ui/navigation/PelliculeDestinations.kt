@@ -6,13 +6,18 @@ import fr.cklla.pellicule.ui.AppTab
  * Routes de navigation de l'app (Navigation Compose).
  *
  * Les 3 onglets (Bibliothèque/Recherche/Stats) sont des destinations de premier niveau, empilées
- * une seule fois grâce à `popUpTo`/`restoreState` dans `MainActivity`. D'autres routes (détail
- * d'un contenu, aperçu depuis la recherche...) viendront s'ajouter avec les écrans correspondants.
+ * une seule fois grâce à `popUpTo`/`restoreState` dans `MainActivity`. Détail est poussé par-dessus
+ * depuis la Bibliothèque et n'a pas de barre de navigation basse.
  */
 object PelliculeDestinations {
     const val BIBLIOTHEQUE = "bibliotheque"
     const val RECHERCHE = "recherche"
     const val STATS = "stats"
+
+    const val DETAIL_ARG_MEDIA_ID = "mediaId"
+    const val DETAIL = "detail/{$DETAIL_ARG_MEDIA_ID}"
+
+    fun detailRoute(mediaId: String) = "detail/$mediaId"
 }
 
 /** Route associée à chaque onglet de la navigation basse. */

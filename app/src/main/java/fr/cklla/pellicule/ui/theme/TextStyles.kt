@@ -83,4 +83,49 @@ object PelliculeTextStyles {
         fontWeight = FontWeight.Medium,
         fontSize = 10.5.sp,
     )
+
+    // --- Écran Détail ---
+
+    val coverLetterLarge = TextStyle(
+        fontFamily = FrauncesItalic,
+        fontWeight = FontWeight.SemiBold,
+        fontStyle = FontStyle.Italic,
+        fontSize = 96.sp,
+    )
+
+    val backLabel = TextStyle(
+        fontFamily = InterFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 13.sp,
+    )
+
+    val detailTitle = TextStyle(
+        fontFamily = FrauncesItalic,
+        fontWeight = FontWeight.SemiBold,
+        fontStyle = FontStyle.Italic,
+        fontSize = 25.sp,
+    )
+
+    val detailSubtitle = TextStyle(
+        fontFamily = InterFamily,
+        fontSize = 13.sp,
+    )
+
+    val sectionLabel = TextStyle(
+        fontFamily = InterFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 11.sp,
+        letterSpacing = 0.9.sp,
+    )
+
+    val statusPillLabel = TextStyle(
+        fontFamily = InterFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 13.sp,
+    )
+
+    val linkLabel = TextStyle(
+        fontFamily = InterFamily,
+        fontSize = 12.5.sp,
+    )
 }

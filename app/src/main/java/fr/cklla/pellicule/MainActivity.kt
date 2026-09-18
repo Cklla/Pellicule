@@ -17,8 +17,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import dagger.hilt.android.AndroidEntryPoint
 import fr.cklla.pellicule.ui.AppTab
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import fr.cklla.pellicule.ui.bibliotheque.BibliothequeScreen
 import fr.cklla.pellicule.ui.components.BottomNavBar
+import fr.cklla.pellicule.ui.detail.DetailScreen
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import fr.cklla.pellicule.ui.navigation.route
 import fr.cklla.pellicule.ui.recherche.RechercheScreen
@@ -77,9 +80,21 @@ fun PelliculeApp() {
             startDestination = PelliculeDestinations.BIBLIOTHEQUE,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(PelliculeDestinations.BIBLIOTHEQUE) { BibliothequeScreen() }
+            composable(PelliculeDestinations.BIBLIOTHEQUE) {
+                BibliothequeScreen(
+                    onMediaClick = { mediaId ->
+                        navController.navigate(PelliculeDestinations.detailRoute(mediaId))
+                    },
+                )
+            }
             composable(PelliculeDestinations.RECHERCHE) { RechercheScreen() }
             composable(PelliculeDestinations.STATS) { StatsScreen() }
+            composable(
+                route = PelliculeDestinations.DETAIL,
+                arguments = listOf(navArgument(PelliculeDestinations.DETAIL_ARG_MEDIA_ID) { type = NavType.StringType }),
+            ) {
+                DetailScreen(onBackClick = { navController.popBackStack() })
+            }
         }
     }
 }

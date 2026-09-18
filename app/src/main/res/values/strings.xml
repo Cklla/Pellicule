@@ -26,6 +26,15 @@
     <string name="empty_message_en_cours">Rien en cours de visionnage en ce moment.</string>
     <string name="empty_message_vu">Tu n\'as encore rien vu.</string>
 
+    <!-- Écran Détail -->
+    <string name="detail_back">Retour à la bibliothèque</string>
+    <string name="detail_status_label">Statut</string>
+    <string name="detail_remove_action">Retirer du suivi</string>
+    <string name="detail_remove_confirm_title">Retirer ce contenu du suivi ?</string>
+    <string name="detail_remove_confirm_message">Cette action est définitive : le contenu et son statut seront supprimés.</string>
+    <string name="detail_remove_confirm_confirm">Retirer</string>
+    <string name="detail_remove_confirm_cancel">Annuler</string>
+
     <!-- Navigation basse -->
     <string name="nav_recherche">Recherche</string>
     <string name="nav_stats">Stats</string>
