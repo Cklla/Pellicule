@@ -63,7 +63,7 @@ class JellyfinRepositoryImpl @Inject constructor(
         val jellyfinId = resolveJellyfinId(current, media) ?: return
         val episodes = jellyfinApi.getSeriesEpisodes(
             url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
-            token = current.accessToken,
+            authHeader = authHeader(current.accessToken),
             userId = current.userId,
         ).items
         val watched = episodes
@@ -83,15 +83,15 @@ class JellyfinRepositoryImpl @Inject constructor(
             val jellyfinId = resolveJellyfinId(current, media) ?: return
             val episodeItemId = jellyfinApi.getSeriesEpisodes(
                 url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
-                token = current.accessToken,
+                authHeader = authHeader(current.accessToken),
                 userId = current.userId,
             ).items.firstOrNull { it.seasonNumber == seasonNumber && it.episodeNumber == episodeNumber }?.id ?: return
 
             val url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, episodeItemId)
             if (watched) {
-                jellyfinApi.markPlayed(url, current.accessToken)
+                jellyfinApi.markPlayed(url, authHeader(current.accessToken))
             } else {
-                jellyfinApi.markUnplayed(url, current.accessToken)
+                jellyfinApi.markUnplayed(url, authHeader(current.accessToken))
             }
         }
     }
@@ -103,7 +103,7 @@ class JellyfinRepositoryImpl @Inject constructor(
 
         val items = jellyfinApi.getItems(
             url = JellyfinApi.itemsUrl(current.serverUrl, current.userId),
-            token = current.accessToken,
+            authHeader = authHeader(current.accessToken),
         ).items
         val resolvedId = items.firstOrNull { it.providerIds?.get("Tmdb") == tmdbId.toString() }?.id ?: return null
 
@@ -111,6 +111,9 @@ class JellyfinRepositoryImpl @Inject constructor(
         return resolvedId
     }
 
-    private fun authHeader() =
-        "MediaBrowser Client=\"Pellicule\", Device=\"Android\", DeviceId=\"${sessionStore.deviceId}\", Version=\"1.0\""
+    /** Ce serveur exige le schéma `MediaBrowser` sur `Authorization` pour tous les appels, y compris authentifiés (`Token=`) — voir doc de [JellyfinApi]. */
+    private fun authHeader(token: String? = null) = buildString {
+        append("MediaBrowser Client=\"Pellicule\", Device=\"Android\", DeviceId=\"${sessionStore.deviceId}\", Version=\"1.0\"")
+        if (token != null) append(", Token=\"$token\"")
+    }
 }

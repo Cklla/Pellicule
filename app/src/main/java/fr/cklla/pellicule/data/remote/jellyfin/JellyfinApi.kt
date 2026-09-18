@@ -16,13 +16,19 @@ import retrofit2.http.Url
  * API Jellyfin (auth + lecture/écriture du statut "vu"). Toutes les URLs sont absolues (voir
  * [Url]) puisque le serveur est renseigné par l'utilisateur à l'exécution : la base URL Retrofit
  * fournie par `JellyfinNetworkModule` n'est qu'un placeholder, jamais utilisée telle quelle.
+ *
+ * Ce serveur (testé en 12.1.0) n'accepte l'authentification — login comme appels de session —
+ * que via l'en-tête `Authorization: MediaBrowser Client="...", ..., Token="..."` : ni
+ * `X-Emby-Authorization` (login) ni `X-Emby-Token` (appels authentifiés) ne sont reconnus, ils
+ * renvoient respectivement 400 et 401 comme si l'en-tête était absent. Voir
+ * `JellyfinRepositoryImpl.authHeader`.
  */
 interface JellyfinApi {
 
     @POST
     suspend fun authenticateByName(
         @Url url: String,
-        @Header("X-Emby-Authorization") authHeader: String,
+        @Header("Authorization") authHeader: String,
         @Body body: JellyfinAuthRequestDto,
     ): JellyfinAuthResponseDto
 
@@ -30,7 +36,7 @@ interface JellyfinApi {
     @GET
     suspend fun getItems(
         @Url url: String,
-        @Header("X-Emby-Token") token: String,
+        @Header("Authorization") authHeader: String,
         @Query("IncludeItemTypes") includeItemTypes: String = "Series",
         @Query("Recursive") recursive: Boolean = true,
         @Query("Fields") fields: String = "ProviderIds",
@@ -40,7 +46,7 @@ interface JellyfinApi {
     @GET
     suspend fun getSeriesEpisodes(
         @Url url: String,
-        @Header("X-Emby-Token") token: String,
+        @Header("Authorization") authHeader: String,
         @Query("userId") userId: String,
         @Query("Fields") fields: String = "UserData",
     ): JellyfinEpisodesResponseDto
@@ -48,13 +54,13 @@ interface JellyfinApi {
     @POST
     suspend fun markPlayed(
         @Url url: String,
-        @Header("X-Emby-Token") token: String,
+        @Header("Authorization") authHeader: String,
     )
 
     @DELETE
     suspend fun markUnplayed(
         @Url url: String,
-        @Header("X-Emby-Token") token: String,
+        @Header("Authorization") authHeader: String,
     )
 
     companion object {

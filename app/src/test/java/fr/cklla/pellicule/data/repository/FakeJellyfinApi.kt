@@ -28,22 +28,22 @@ class FakeJellyfinApi : JellyfinApi {
 
     override suspend fun getItems(
         url: String,
-        token: String,
+        authHeader: String,
         includeItemTypes: String,
         recursive: Boolean,
         fields: String,
     ): JellyfinItemsResponseDto = JellyfinItemsResponseDto(items)
 
-    override suspend fun getSeriesEpisodes(url: String, token: String, userId: String, fields: String): JellyfinEpisodesResponseDto {
+    override suspend fun getSeriesEpisodes(url: String, authHeader: String, userId: String, fields: String): JellyfinEpisodesResponseDto {
         val seriesId = url.substringAfter("/Shows/").substringBefore("/Episodes")
         return JellyfinEpisodesResponseDto(episodesBySeriesId[seriesId].orEmpty())
     }
 
-    override suspend fun markPlayed(url: String, token: String) {
+    override suspend fun markPlayed(url: String, authHeader: String) {
         playedUrls.add(url)
     }
 
-    override suspend fun markUnplayed(url: String, token: String) {
+    override suspend fun markUnplayed(url: String, authHeader: String) {
         unplayedUrls.add(url)
     }
 }
