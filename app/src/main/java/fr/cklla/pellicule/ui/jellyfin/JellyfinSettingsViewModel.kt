@@ -14,9 +14,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Formulaire de connexion à un serveur Jellyfin (voir CLAUDE.md, section Synchronisation) :
- * module entièrement optionnel, accessible depuis Stats. [JellyfinRepository.session] pilote
- * l'affichage statut connecté/déconnecté ; les champs de saisie restent locaux à cet écran.
+ * Formulaire de connexion à un serveur Jellyfin : module entièrement optionnel, accessible depuis
+ * Stats. [JellyfinRepository.session] pilote l'affichage statut connecté/déconnecté ; les champs
+ * de saisie restent locaux à cet écran.
  */
 @HiltViewModel
 class JellyfinSettingsViewModel @Inject constructor(

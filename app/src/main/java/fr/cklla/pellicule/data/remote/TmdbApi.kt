@@ -11,8 +11,8 @@ import retrofit2.http.Query
  * API TMDB (https://developer.themoviedb.org/reference) : l'endpoint de recherche multi-type
  * (films, séries, personnes), seul besoin pour l'instant côté recherche/ajout au suivi.
  *
- * `language=fr-FR` par défaut (voir CLAUDE.md) : TMDB retombe de lui-même sur le titre original
- * quand aucune traduction française n'existe, donc pas de second appel nécessaire pour le titre.
+ * `language=fr-FR` par défaut : TMDB retombe de lui-même sur le titre original quand aucune
+ * traduction française n'existe, donc pas de second appel nécessaire pour le titre.
  */
 interface TmdbApi {
 

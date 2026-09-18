@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Implémentation [JellyfinRepository] : auth par login utilisateur, résolution des items par
- * `ProviderIds.Tmdb` (bibliothèque indexée TMDB, voir CLAUDE.md), et réconciliation Room via
+ * `ProviderIds.Tmdb` (bibliothèque indexée TMDB côté serveur), et réconciliation Room via
  * [EpisodeRepository] / [MediaRepository]. Une série sans `tmdbId` local (ajoutée hors recherche)
  * n'est jamais mappable, elle est ignorée par la synchro.
  */
