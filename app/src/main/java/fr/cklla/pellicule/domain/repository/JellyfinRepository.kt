@@ -6,8 +6,8 @@ import fr.cklla.pellicule.domain.model.Resource
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Synchronisation bidirectionnelle du statut de visionnage avec un serveur Jellyfin (voir
- * CLAUDE.md, section Synchronisation) — module optionnel, `session` vaut `null` tant que
+ * Synchronisation bidirectionnelle du statut de visionnage avec un serveur Jellyfin
+ * — module optionnel, `session` vaut `null` tant que
  * l'utilisateur n'a connecté aucun serveur.
  *
  * Le statut `WatchStatus` (à voir/en cours/vu) est dérivé de ce que renvoie Jellyfin, qui fait
