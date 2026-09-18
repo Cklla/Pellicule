@@ -143,11 +143,17 @@ class MediaRepositoryImpl @Inject constructor(
     // Miroir complet : upsert du contenu distant + suppression des lignes Room absentes du
     // snapshot distant. Acceptable en performance vu la taille d'un suivi personnel. Les épisodes
     // vus (`watched_episode`) d'un contenu supprimé partent avec lui (`onDelete = CASCADE`).
+    //
+    // `mediaDao.upsert` (UPDATE si la ligne existe déjà), jamais `insert` (INSERT OR REPLACE) ici :
+    // ce miroir tourne à chaque snapshot Firestore, y compris l'écho de nos propres écritures
+    // locales (voir `observeMedia`) — avec `insert`, chaque écho referait un DELETE+INSERT de
+    // *toutes* les lignes du snapshot et supprimerait en cascade les `watched_episode` de tous les
+    // contenus suivis, pas seulement celui qui vient de changer.
     private suspend fun mirrorIntoRoom(remoteMedia: List<Media>) {
         val remoteIds = remoteMedia.map { it.id }.toSet()
         val localIds = mediaDao.getAllIds()
         localIds.filter { it !in remoteIds }.forEach { mediaDao.deleteById(it) }
-        remoteMedia.forEach { mediaDao.insert(it.toEntity()) }
+        remoteMedia.forEach { mediaDao.upsert(it.toEntity()) }
     }
 
     // Écriture Firestore en best-effort : une erreur ici ne fait jamais échouer l'opération

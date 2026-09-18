@@ -32,6 +32,12 @@ class FakeMediaDao : MediaDao {
         this.media.update { list -> list.map { if (it.id == media.id) media else it } }
     }
 
+    override suspend fun upsert(media: MediaEntity) {
+        this.media.update { list ->
+            if (list.any { it.id == media.id }) list.map { if (it.id == media.id) media else it } else list + media
+        }
+    }
+
     override suspend fun deleteById(id: String) {
         media.update { list -> list.filterNot { it.id == id } }
     }
