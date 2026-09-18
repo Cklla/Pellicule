@@ -77,6 +77,42 @@ class MediaRepositoryImplTest {
     }
 
     @Test
+    fun `updateMedia horodate le passage au statut Vu`() = runTest {
+        val addedId = (repository.addMedia(dune) as Resource.Success).data
+        val vu = dune.copy(id = addedId, status = WatchStatus.VU)
+
+        repository.updateMedia(vu)
+
+        val media = repository.observeMedia().first().first()
+        assertTrue(media.watchedAt != null)
+    }
+
+    @Test
+    fun `updateMedia ne reecrit pas la date de visionnage si deja Vu`() = runTest {
+        val addedId = (repository.addMedia(dune) as Resource.Success).data
+        repository.updateMedia(dune.copy(id = addedId, status = WatchStatus.VU))
+        val firstWatchedAt = repository.observeMedia().first().first().watchedAt
+
+        // Un changement qui laisse le statut à VU (ex. édition de la note) ne doit pas décaler la
+        // date de visionnage déjà enregistrée.
+        repository.updateMedia(dune.copy(id = addedId, status = WatchStatus.VU, rating = 5))
+
+        val media = repository.observeMedia().first().first()
+        assertEquals(firstWatchedAt, media.watchedAt)
+    }
+
+    @Test
+    fun `updateMedia efface la date de visionnage si le statut quitte Vu`() = runTest {
+        val addedId = (repository.addMedia(dune) as Resource.Success).data
+        repository.updateMedia(dune.copy(id = addedId, status = WatchStatus.VU))
+
+        repository.updateMedia(dune.copy(id = addedId, status = WatchStatus.EN_COURS))
+
+        val media = repository.observeMedia().first().first()
+        assertEquals(null, media.watchedAt)
+    }
+
+    @Test
     fun `deleteMedia retire le contenu du suivi`() = runTest {
         val addedId = (repository.addMedia(dune) as Resource.Success).data
 

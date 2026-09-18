@@ -19,6 +19,7 @@ class MediaMappersTest {
             tmdbId = 10494L,
             releaseYear = 1997,
             posterUrl = "https://example.org/poster.jpg",
+            watchedAt = 1_700_000_000_000L,
         )
 
         val roundTripped = media.toEntity().toDomain()

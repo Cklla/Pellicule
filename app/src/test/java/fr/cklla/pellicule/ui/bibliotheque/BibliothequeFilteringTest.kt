@@ -34,4 +34,46 @@ class BibliothequeFilteringTest {
         assertEquals(1, counts[BibliothequeFilter.A_VOIR])
         assertEquals(1, counts[BibliothequeFilter.EN_COURS])
     }
+
+    // Milieu d'année en UTC : hors de portée d'un changement de fuseau horaire local qui ferait
+    // basculer la date sur l'année voisine (au plus ±14h autour de l'UTC).
+    private val watchedIn2023 = 1_688_169_600_000L // 2023-07-01T00:00:00Z
+    private val watchedIn2024 = 1_719_792_000_000L // 2024-07-01T00:00:00Z
+
+    @Test
+    fun `watchedYear derive l'annee de visionnage depuis watchedAt`() {
+        assertEquals(2023, watchedYear(perfectBlue.copy(watchedAt = watchedIn2023)))
+        assertEquals(null, watchedYear(perfectBlue))
+    }
+
+    @Test
+    fun `availableWatchedYears ne considere que les contenus Vu, sans doublon, du plus recent au plus ancien`() {
+        val goT = Media(id = "4", title = "Game of Thrones", type = MediaType.SERIE, status = WatchStatus.VU, watchedAt = watchedIn2024)
+        val perfectBlueVu2023 = perfectBlue.copy(watchedAt = watchedIn2023)
+        val severanceVu2023 = severance.copy(status = WatchStatus.VU, watchedAt = watchedIn2023)
+
+        val years = availableWatchedYears(listOf(perfectBlueVu2023, severanceVu2023, goT, dune))
+
+        assertEquals(listOf(2024, 2023), years)
+    }
+
+    @Test
+    fun `filtre par annee de visionnage ne garde que les contenus Vu cette annee-la`() {
+        val goT = Media(id = "4", title = "Game of Thrones", type = MediaType.SERIE, status = WatchStatus.VU, watchedAt = watchedIn2024)
+        val perfectBlueVu2023 = perfectBlue.copy(watchedAt = watchedIn2023)
+
+        val result = filterMedia(listOf(perfectBlueVu2023, goT, dune), BibliothequeFilter.VU, selectedYear = 2024)
+
+        assertEquals(listOf(goT), result)
+    }
+
+    @Test
+    fun `le filtre par annee ne s'applique pas en dehors du filtre Vu`() {
+        val duneVu2023 = dune.copy(status = WatchStatus.VU, watchedAt = watchedIn2023)
+
+        // TOUS ignore l'année sélectionnée : un contenu "à voir" sans watchedAt reste visible.
+        val result = filterMedia(listOf(duneVu2023, severance), BibliothequeFilter.TOUS, selectedYear = 2024)
+
+        assertEquals(listOf(duneVu2023, severance), result)
+    }
 }

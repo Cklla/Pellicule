@@ -17,16 +17,20 @@ class BibliothequeViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val selectedFilter = MutableStateFlow(BibliothequeFilter.TOUS)
+    private val selectedWatchedYear = MutableStateFlow<Int?>(null)
 
     val uiState: StateFlow<BibliothequeUiState> = combine(
         mediaRepository.observeMedia(),
         selectedFilter,
-    ) { media, filter ->
+        selectedWatchedYear,
+    ) { media, filter, watchedYear ->
         BibliothequeUiState(
             isLoading = false,
-            visibleMedia = filterMedia(media, filter),
+            visibleMedia = filterMedia(media, filter, watchedYear),
             selectedFilter = filter,
             filterCounts = countByFilter(media),
+            availableWatchedYears = availableWatchedYears(media),
+            selectedWatchedYear = watchedYear,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -36,5 +40,13 @@ class BibliothequeViewModel @Inject constructor(
 
     fun onFilterSelected(filter: BibliothequeFilter) {
         selectedFilter.value = filter
+        // Le filtre par année n'a de sens que sous "Vu" (voir `filterMedia`) : changer de filtre
+        // de statut repart d'une sélection d'année propre plutôt que de garder un choix invisible.
+        selectedWatchedYear.value = null
+    }
+
+    /** Re-sélectionner l'année déjà active la désélectionne (retour à "Toutes les années"). */
+    fun onWatchedYearSelected(year: Int?) {
+        selectedWatchedYear.value = if (year != null && selectedWatchedYear.value == year) null else year
     }
 }

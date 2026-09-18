@@ -24,6 +24,7 @@ private const val FIELD_RELEASE_YEAR = "releaseYear"
 private const val FIELD_POSTER_URL = "posterUrl"
 private const val FIELD_JELLYFIN_ID = "jellyfinId"
 private const val FIELD_RATING = "rating"
+private const val FIELD_WATCHED_AT = "watchedAt"
 
 fun Media.toFirestoreMap(): Map<String, Any?> = mapOf(
     FIELD_TITLE to title,
@@ -34,6 +35,7 @@ fun Media.toFirestoreMap(): Map<String, Any?> = mapOf(
     FIELD_POSTER_URL to posterUrl,
     FIELD_JELLYFIN_ID to jellyfinId,
     FIELD_RATING to rating,
+    FIELD_WATCHED_AT to watchedAt,
 )
 
 // Firestore n'a pas de type `Int` natif (tout nombre entier remonte en `Long`) : cast via `Number`
@@ -62,5 +64,6 @@ fun mapToMedia(id: String, data: Map<String, Any?>): Media? {
         posterUrl = (data[FIELD_POSTER_URL] as? String)?.takeIf { it.startsWith("https://") },
         jellyfinId = data[FIELD_JELLYFIN_ID] as? String,
         rating = (data[FIELD_RATING] as? Number)?.toInt(),
+        watchedAt = (data[FIELD_WATCHED_AT] as? Number)?.toLong(),
     )
 }

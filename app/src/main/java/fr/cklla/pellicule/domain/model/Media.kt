@@ -14,6 +14,11 @@ package fr.cklla.pellicule.domain.model
  *   et mis en cache une fois trouvé (voir `JellyfinRepository`) — `null` tant que la résolution
  *   n'a pas eu lieu, ou si aucun serveur Jellyfin n'est connecté.
  * @param rating note personnelle de 1 à 5, ou `null` si le contenu n'est pas encore noté.
+ * @param watchedAt horodatage (epoch millis) du passage au statut [WatchStatus.VU], `null` tant
+ *   que ce statut n'a jamais été atteint. Distinct de [releaseYear] : sert à filtrer par année de
+ *   *visionnage* plutôt que par année de sortie du contenu. Dérivé automatiquement par le
+ *   Repository à chaque transition de statut (voir `MediaRepositoryImpl.resolveWatchedAt`),
+ *   jamais renseigné à la main par l'UI.
  */
 data class Media(
     val id: String = "",
@@ -25,4 +30,5 @@ data class Media(
     val posterUrl: String? = null,
     val jellyfinId: String? = null,
     val rating: Int? = null,
+    val watchedAt: Long? = null,
 )

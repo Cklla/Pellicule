@@ -1,10 +1,12 @@
 package fr.cklla.pellicule.data.repository
 
 import fr.cklla.pellicule.data.local.MediaDao
+import fr.cklla.pellicule.data.local.entity.MediaEntity
 import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSource
 import fr.cklla.pellicule.di.ApplicationScope
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.Resource
+import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.AuthRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import java.util.UUID
@@ -66,7 +68,7 @@ class MediaRepositoryImpl @Inject constructor(
     // dans Firestore, les deux doivent donc partager exactement le même id.
     override suspend fun addMedia(media: Media): Resource<String> = runCatching {
         val id = media.id.ifBlank { UUID.randomUUID().toString() }
-        val mediaWithId = media.copy(id = id)
+        val mediaWithId = media.copy(id = id, watchedAt = resolveWatchedAt(previous = null, newStatus = media.status))
         mediaDao.insert(mediaWithId.toEntity())
         pushToFirestore { uid -> firestoreDataSource.upsertMedia(uid, mediaWithId) }
         id
@@ -76,12 +78,36 @@ class MediaRepositoryImpl @Inject constructor(
     )
 
     override suspend fun updateMedia(media: Media): Resource<Unit> = runCatching {
-        mediaDao.update(media.toEntity())
-        pushToFirestore { uid -> firestoreDataSource.upsertMedia(uid, media) }
+        val previous = mediaDao.getByIdOnce(media.id)
+        val mediaToPersist = media.copy(watchedAt = resolveWatchedAt(previous, media.status))
+        mediaDao.update(mediaToPersist.toEntity())
+        pushToFirestore { uid -> firestoreDataSource.upsertMedia(uid, mediaToPersist) }
     }.fold(
         onSuccess = { Resource.Success(Unit) },
         onFailure = { Resource.Error("Impossible de mettre à jour ce contenu.", it) },
     )
+
+    // Dérive automatiquement la date de visionnage à chaque transition de statut, plutôt que de
+    // laisser l'UI la renseigner à la main : un seul point de vérité pour "quand un contenu est-il
+    // devenu Vu", que le changement de statut vienne d'une sélection manuelle (DetailViewModel) ou
+    // d'une synchro Jellyfin (JellyfinRepositoryImpl), les deux passant par `updateMedia`.
+    //
+    // Se base sur l'état déjà persisté en Room ([previous]), jamais sur `media.watchedAt` tel que
+    // fourni par l'appelant : `DetailViewModel.workingMedia` ne relit jamais Room après son
+    // chargement initial, un `watchedAt` calculé ici et jamais propagé en retour dans cette copie
+    // de travail locale serait sinon écrasé par `null` au prochain appel.
+    //
+    // Horodatage posé une seule fois à l'entrée dans VU (pas de re-timestamp si déjà VU, sinon
+    // éditer la note ou re-synchroniser Jellyfin déplacerait la date de visionnage à chaque fois),
+    // effacé dès que le contenu quitte VU (redevient pertinent le jour où il y repasse).
+    private fun resolveWatchedAt(previous: MediaEntity?, newStatus: WatchStatus): Long? {
+        val previousStatus = previous?.status?.let { runCatching { WatchStatus.valueOf(it) }.getOrNull() }
+        return when {
+            newStatus != WatchStatus.VU -> null
+            previousStatus == WatchStatus.VU -> previous?.watchedAt
+            else -> System.currentTimeMillis()
+        }
+    }
 
     override suspend fun deleteMedia(id: String): Resource<Unit> = runCatching {
         mediaDao.deleteById(id)
