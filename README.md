@@ -32,13 +32,13 @@ optionnelle avec un serveur Jellyfin.
   anime confondus.
 - **Recherche** : recherche multi-type via l'[API TMDB](https://www.themoviedb.org/documentation/api)
   (titre, affiche, année), aperçu de la fiche avant ajout, ajout en un tap au suivi. Fiches en
-  français en priorité, avec repli automatique sur l'anglais quand la traduction française manque.
+  français en priorité, avec fallback sur l'anglais quand la traduction française manque.
 - **Fiche détail** : changement de statut, note personnelle (1 à 5 étoiles), synopsis TMDB, retrait
   du suivi. Pour les séries et anime, liste des épisodes par saison avec statut vu/non-vu
   individuel.
 - **Suivi par épisode** : statut vu/non-vu géré à la main par défaut, ou synchronisé automatiquement
   avec Jellyfin si un serveur est connecté (voir plus bas). Le statut global d'une série/anime se
-  déduit alors automatiquement du ratio d'épisodes vus une fois Jellyfin actif.
+  synchronise alors automatiquement une fois Jellyfin actif.
 - **Connexion Google** : authentification obligatoire (Firebase Auth) pour identifier l'utilisateur
   et sécuriser ses données côté cloud.
 - **Synchronisation multi-appareils** : le suivi est mirroré en continu entre l'appareil (Room) et
@@ -124,7 +124,7 @@ offline)             (sync distante)           (recherche TMDB,
 ### 1. Cloner le projet
 
 ```bash
-git clone <url-du-repo>
+git clone https://github.com/Cklla/Pellicule
 cd Pellicule
 ```
 
