@@ -1,0 +1,32 @@
+stages:
+  - test
+
+unit_tests:
+  stage: test
+  tags:
+    - linux-docker
+  image: ghcr.io/cirruslabs/android-sdk:36
+  variables:
+    # Gradle : cache local au projet et options mémoire raisonnables
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+    GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8"
+  before_script:
+    - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
+    - chmod +x ./gradlew
+    - java -version
+  script:
+    - ./gradlew test --no-daemon --stacktrace
+  artifacts:
+    when: always
+    paths:
+      - "**/build/reports/tests/"
+    expire_in: 1 week
+    reports:
+      junit:
+        - "**/build/test-results/test*/TEST-*.xml"
+  cache:
+    key: gradle-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .gradle/
+      - .gradle/caches/
+      - .gradle/wrapper/
