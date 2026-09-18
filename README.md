@@ -48,7 +48,7 @@ optionnelle avec un serveur Jellyfin.
 - **Synchronisation Jellyfin (optionnelle)** : l'app est pleinement utilisable sans serveur Jellyfin
   — c'est un module qu'on active en renseignant un serveur dans l'écran Compte. Une fois connecté,
   le statut vu (films et épisodes) se synchronise dans les deux sens entre Pellicule et
-  Jellyfin/Moonfin.
+  Jellyfin.
 
 ## Captures d'écran
 
