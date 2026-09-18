@@ -1,6 +1,12 @@
 <resources>
     <string name="app_name">Pellicule</string>
 
+    <!-- Écran Connexion -->
+    <string name="login_kicker">bienvenue</string>
+    <string name="login_title">Pellicule</string>
+    <string name="login_subtitle">Connecte-toi avec Google pour retrouver ton suivi sur tous tes appareils.</string>
+    <string name="login_google_button">Continuer avec Google</string>
+
     <!-- Bibliothèque -->
     <string name="bibliotheque_kicker">carnet de visionnage</string>
     <string name="bibliotheque_title">Bibliothèque</string>

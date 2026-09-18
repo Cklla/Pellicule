@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Un utilisateur ne voit et n'écrit que sa propre collection. Tout le reste de la base est
+    // refusé par défaut : aucune autre règle n'existe, et Firestore refuse ce qu'il n'autorise pas
+    // explicitement. Projet Firebase partagé avec Cartouche (collection `games` séparée, voir son
+    // propre firestore.rules) : ces règles s'ajoutent aux siennes, jamais en remplacement.
+    match /users/{userId}/movies/{mediaId} {
+      allow read: if isOwner(userId);
+      allow delete: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidMedia(request.resource.data);
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Les règles ne se contentent pas de vérifier "qui écrit" mais aussi "quoi" : sans ça, un
+    // compte authentifié pourrait remplir la base de documents arbitrairement gros ou mal formés.
+    // La liste de champs doit rester synchronisée avec celle produite par le mapper Firestore
+    // côté app (`Media` -> document) à mesure que la synchro cloud sera câblée.
+    function isValidMedia(media) {
+      return media.keys().hasOnly([
+               'title', 'type', 'status', 'tmdbId', 'releaseYear', 'posterUrl', 'jellyfinId',
+               'rating'
+             ])
+             && media.keys().hasAll(['title', 'type', 'status'])
+             && media.title is string && media.title.size() <= 300
+             && media.type in ['FILM', 'SERIE', 'ANIME']
+             && media.status in ['A_VOIR', 'EN_COURS', 'VU']
+             && isIntBetween(media, 'tmdbId', 0, 9999999999)
+             && isIntBetween(media, 'releaseYear', 1850, 2999)
+             && isIntBetween(media, 'rating', 1, 5)
+             && isStringUpTo(media, 'posterUrl', 2000)
+             && isStringUpTo(media, 'jellyfinId', 200);
+    }
+
+    // Champ optionnel : absent ou null est valide, une valeur présente doit respecter les bornes.
+    function isIntBetween(media, field, min, max) {
+      return !(field in media) || media[field] == null
+             || (media[field] is int && media[field] >= min && media[field] <= max);
+    }
+
+    function isStringUpTo(media, field, maxLength) {
+      return !(field in media) || media[field] == null
+             || (media[field] is string && media[field].size() <= maxLength);
+    }
+  }
+}

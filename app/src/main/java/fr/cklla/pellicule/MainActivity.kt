@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import fr.cklla.pellicule.ui.AppTab
 import androidx.navigation.NavType
@@ -28,6 +29,8 @@ import fr.cklla.pellicule.ui.bibliotheque.BibliothequeScreen
 import fr.cklla.pellicule.ui.components.BottomNavBar
 import fr.cklla.pellicule.ui.detail.DetailScreen
 import fr.cklla.pellicule.ui.jellyfin.JellyfinSettingsScreen
+import fr.cklla.pellicule.ui.login.AuthGateViewModel
+import fr.cklla.pellicule.ui.login.LoginScreen
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import fr.cklla.pellicule.ui.navigation.route
 import fr.cklla.pellicule.ui.recherche.RechercheScreen
@@ -56,11 +59,22 @@ class MainActivity : ComponentActivity() {
 }
 
 // Navigation Compose : les 3 onglets sont des destinations de premier niveau (une seule instance
-// de chacune, état conservé via saveState/restoreState). Pas de gate de connexion pour l'instant
-// (Firebase Auth pas encore câblé) : l'app démarre directement sur la Bibliothèque, utilisable
-// sans compte ni serveur.
+// de chacune, état conservé via saveState/restoreState).
+//
+// Connexion Google obligatoire au lancement : tant que personne n'est connecté, on affiche
+// `LoginScreen` à la place du `NavHost` — pas une destination de plus dans le graphe de
+// navigation, un vrai "portail" en dehors de la pile. Dès que `AuthRepository.currentUser` devient
+// non-null (connexion réussie), la recomposition bascule automatiquement sur le NavHost normal,
+// qui démarre toujours sur la Bibliothèque. Jellyfin reste indépendant de ce compte (voir
+// CLAUDE.md) : sa connexion propre se fait séparément depuis l'onglet Stats.
 @Composable
-fun PelliculeApp() {
+fun PelliculeApp(authGateViewModel: AuthGateViewModel = hiltViewModel()) {
+    val currentUser by authGateViewModel.currentUser.collectAsStateWithLifecycle()
+    if (currentUser == null) {
+        LoginScreen()
+        return
+    }
+
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     val selectedTab = AppTab.entries.find { it.route == currentRoute }
