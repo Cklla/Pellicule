@@ -1,4 +1,4 @@
-package fr.cklla.pellicule.ui.stats
+package fr.cklla.pellicule.ui.compte
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.cklla.pellicule.R
+import fr.cklla.pellicule.ui.theme.AccentPurpleLight
 import fr.cklla.pellicule.ui.theme.BackgroundDark
 import fr.cklla.pellicule.ui.theme.BorderHairline
 import fr.cklla.pellicule.ui.theme.PelliculeTextStyles
@@ -30,15 +32,25 @@ import fr.cklla.pellicule.ui.theme.SurfaceCard
 import fr.cklla.pellicule.ui.theme.TextMuted
 import fr.cklla.pellicule.ui.theme.TextPrimary
 
-/** Écran Stats : vue d'ensemble de la progression (à construire) + accès à la connexion Jellyfin, à cet endroit plutôt que dans un écran Réglages dédié (une seule action de ce type pour l'instant). */
 @Composable
-fun StatsScreen(onJellyfinSettingsClick: () -> Unit, viewModel: StatsViewModel = hiltViewModel()) {
+fun CompteScreen(onJellyfinSettingsClick: () -> Unit, viewModel: CompteViewModel = hiltViewModel()) {
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     val connectedServerUrl by viewModel.connectedServerUrl.collectAsStateWithLifecycle()
-    StatsContent(connectedServerUrl = connectedServerUrl, onJellyfinSettingsClick = onJellyfinSettingsClick)
+    CompteContent(
+        signedInAs = currentUser?.displayName,
+        onSignOutClick = viewModel::onSignOutClicked,
+        connectedServerUrl = connectedServerUrl,
+        onJellyfinSettingsClick = onJellyfinSettingsClick,
+    )
 }
 
 @Composable
-private fun StatsContent(connectedServerUrl: String?, onJellyfinSettingsClick: () -> Unit) {
+private fun CompteContent(
+    signedInAs: String?,
+    onSignOutClick: () -> Unit,
+    connectedServerUrl: String?,
+    onJellyfinSettingsClick: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -46,15 +58,32 @@ private fun StatsContent(connectedServerUrl: String?, onJellyfinSettingsClick: (
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            Text(text = stringResource(R.string.nav_stats), style = PelliculeTextStyles.screenTitle, color = TextPrimary)
-            Text(text = stringResource(R.string.stats_placeholder), style = PelliculeTextStyles.emptyMessage, color = TextMuted)
+        Text(text = stringResource(R.string.compte_title), style = PelliculeTextStyles.screenTitle, color = TextPrimary)
+        if (signedInAs != null) {
+            AccountRow(signedInAs = signedInAs, onSignOutClick = onSignOutClick)
         }
         JellyfinCard(connectedServerUrl = connectedServerUrl, onClick = onJellyfinSettingsClick)
+    }
+}
+
+@Composable
+private fun AccountRow(signedInAs: String, onSignOutClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.compte_signed_in_as, signedInAs),
+            style = PelliculeTextStyles.cardSubtitle,
+            color = TextMuted,
+        )
+        Text(
+            text = stringResource(R.string.compte_sign_out),
+            style = PelliculeTextStyles.cardSubtitle,
+            color = AccentPurpleLight,
+            modifier = Modifier.clickable(onClick = onSignOutClick),
+        )
     }
 }
 
@@ -71,10 +100,10 @@ private fun JellyfinCard(connectedServerUrl: String?, onClick: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(text = stringResource(R.string.stats_jellyfin_action), style = PelliculeTextStyles.cardTitle, color = TextPrimary)
+        Text(text = stringResource(R.string.compte_jellyfin_action), style = PelliculeTextStyles.cardTitle, color = TextPrimary)
         Text(
-            text = connectedServerUrl?.let { stringResource(R.string.stats_jellyfin_connected, it) }
-                ?: stringResource(R.string.stats_jellyfin_not_connected),
+            text = connectedServerUrl?.let { stringResource(R.string.compte_jellyfin_connected, it) }
+                ?: stringResource(R.string.compte_jellyfin_not_connected),
             style = PelliculeTextStyles.cardSubtitle,
             color = if (connectedServerUrl != null) SuccessGreen else TextMuted,
         )

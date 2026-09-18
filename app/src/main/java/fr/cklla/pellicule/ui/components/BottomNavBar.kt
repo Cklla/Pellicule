@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,7 +35,7 @@ private data class TabSpec(val tab: AppTab, val icon: ImageVector, val labelRes:
 private val tabs = listOf(
     TabSpec(AppTab.BIBLIOTHEQUE, Icons.AutoMirrored.Outlined.MenuBook, R.string.bibliotheque_title),
     TabSpec(AppTab.RECHERCHE, Icons.Outlined.Search, R.string.nav_recherche),
-    TabSpec(AppTab.STATS, Icons.Outlined.BarChart, R.string.nav_stats),
+    TabSpec(AppTab.COMPTE, Icons.Outlined.AccountCircle, R.string.nav_compte),
 )
 
 /** Barre de navigation basse fixe à 3 onglets, présente sur tous les écrans de premier niveau. */

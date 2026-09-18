@@ -27,6 +27,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import fr.cklla.pellicule.ui.bibliotheque.BibliothequeScreen
 import fr.cklla.pellicule.ui.components.BottomNavBar
+import fr.cklla.pellicule.ui.compte.CompteScreen
 import fr.cklla.pellicule.ui.detail.DetailScreen
 import fr.cklla.pellicule.ui.jellyfin.JellyfinSettingsScreen
 import fr.cklla.pellicule.ui.login.AuthGateViewModel
@@ -34,7 +35,6 @@ import fr.cklla.pellicule.ui.login.LoginScreen
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import fr.cklla.pellicule.ui.navigation.route
 import fr.cklla.pellicule.ui.recherche.RechercheScreen
-import fr.cklla.pellicule.ui.stats.StatsScreen
 import fr.cklla.pellicule.ui.sync.AppSyncViewModel
 import fr.cklla.pellicule.ui.theme.BackgroundDark
 import fr.cklla.pellicule.ui.theme.PelliculeTheme
@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
 // navigation, un vrai "portail" en dehors de la pile. Dès que `AuthRepository.currentUser` devient
 // non-null (connexion réussie), la recomposition bascule automatiquement sur le NavHost normal,
 // qui démarre toujours sur la Bibliothèque. Jellyfin reste indépendant de ce compte (voir
-// CLAUDE.md) : sa connexion propre se fait séparément depuis l'onglet Stats.
+// CLAUDE.md) : sa connexion propre se fait séparément depuis l'onglet Compte.
 @Composable
 fun PelliculeApp(authGateViewModel: AuthGateViewModel = hiltViewModel()) {
     val currentUser by authGateViewModel.currentUser.collectAsStateWithLifecycle()
@@ -130,8 +130,8 @@ fun PelliculeApp(authGateViewModel: AuthGateViewModel = hiltViewModel()) {
                     },
                 )
             }
-            composable(PelliculeDestinations.STATS) {
-                StatsScreen(
+            composable(PelliculeDestinations.COMPTE) {
+                CompteScreen(
                     onJellyfinSettingsClick = { navController.navigate(PelliculeDestinations.JELLYFIN_SETTINGS) },
                 )
             }

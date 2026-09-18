@@ -52,7 +52,7 @@
 
     <!-- Navigation basse -->
     <string name="nav_recherche">Recherche</string>
-    <string name="nav_stats">Stats</string>
+    <string name="nav_compte">Compte</string>
 
     <!-- Écran Recherche -->
     <string name="recherche_kicker">base TMDB</string>
@@ -71,13 +71,13 @@
         <item>The Bear</item>
     </string-array>
 
-    <!-- Placeholders (écrans à construire) -->
-    <string name="stats_placeholder">Statistiques à venir.</string>
-
-    <!-- Écran Stats -->
-    <string name="stats_jellyfin_action">Connexion Jellyfin</string>
-    <string name="stats_jellyfin_connected">Connecté à %1$s</string>
-    <string name="stats_jellyfin_not_connected">Aucun serveur connecté</string>
+    <!-- Écran Compte -->
+    <string name="compte_title">Compte</string>
+    <string name="compte_signed_in_as">Connecté en tant que %1$s</string>
+    <string name="compte_sign_out">Se déconnecter</string>
+    <string name="compte_jellyfin_action">Connexion Jellyfin</string>
+    <string name="compte_jellyfin_connected">Connecté à %1$s</string>
+    <string name="compte_jellyfin_not_connected">Aucun serveur connecté</string>
 
     <!-- Écran Connexion Jellyfin -->
     <string name="jellyfin_kicker">synchro optionnelle</string>
