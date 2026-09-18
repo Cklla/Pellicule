@@ -89,13 +89,10 @@ fun PelliculeApp() {
             }
             composable(PelliculeDestinations.RECHERCHE) {
                 RechercheScreen(
-                    onResultClick = { _, trackedMediaId ->
-                        // Pas encore de flux "aperçu" pour un résultat non ajouté (voir
-                        // DetailScreen, qui ne gère que le cas "contenu déjà suivi") : le clic
-                        // n'ouvre la fiche que pour un résultat déjà présent dans le suivi.
-                        if (trackedMediaId != null) {
-                            navController.navigate(PelliculeDestinations.detailRoute(trackedMediaId))
-                        }
+                    onResultClick = { result, trackedMediaId ->
+                        val route = trackedMediaId?.let { PelliculeDestinations.detailRoute(it) }
+                            ?: PelliculeDestinations.detailApercuRoute(result)
+                        navController.navigate(route)
                     },
                 )
             }
@@ -103,6 +100,33 @@ fun PelliculeApp() {
             composable(
                 route = PelliculeDestinations.DETAIL,
                 arguments = listOf(navArgument(PelliculeDestinations.DETAIL_ARG_MEDIA_ID) { type = NavType.StringType }),
+            ) {
+                DetailScreen(onBackClick = { navController.popBackStack() })
+            }
+            composable(
+                route = PelliculeDestinations.DETAIL_APERCU,
+                arguments = listOf(
+                    navArgument(PelliculeDestinations.DETAIL_APERCU_ARG_TMDB_ID) {
+                        type = NavType.LongType
+                        defaultValue = -1L
+                    },
+                    navArgument(PelliculeDestinations.DETAIL_APERCU_ARG_TITLE) {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument(PelliculeDestinations.DETAIL_APERCU_ARG_TYPE) {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument(PelliculeDestinations.DETAIL_APERCU_ARG_YEAR) {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                    navArgument(PelliculeDestinations.DETAIL_APERCU_ARG_POSTER_URL) {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    },
+                ),
             ) {
                 DetailScreen(onBackClick = { navController.popBackStack() })
             }

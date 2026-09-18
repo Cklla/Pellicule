@@ -92,6 +92,7 @@ fun DetailScreen(
 
     DetailContent(
         media = media,
+        isInBacklog = uiState.isInBacklog,
         seasons = uiState.seasons,
         selectedSeasonNumber = uiState.selectedSeasonNumber,
         episodes = uiState.episodes,
@@ -102,6 +103,7 @@ fun DetailScreen(
         onSeasonSelected = viewModel::onSeasonSelected,
         onEpisodeWatchedToggled = viewModel::onEpisodeWatchedToggled,
         onRemoveMedia = viewModel::onRemoveMedia,
+        onAddMedia = viewModel::onAddMedia,
         modifier = modifier,
     )
 }
@@ -109,6 +111,7 @@ fun DetailScreen(
 @Composable
 private fun DetailContent(
     media: Media,
+    isInBacklog: Boolean,
     seasons: List<Season>,
     selectedSeasonNumber: Int?,
     episodes: List<EpisodeUiModel>,
@@ -119,6 +122,7 @@ private fun DetailContent(
     onSeasonSelected: (Int) -> Unit,
     onEpisodeWatchedToggled: (EpisodeUiModel) -> Unit,
     onRemoveMedia: () -> Unit,
+    onAddMedia: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showRemoveConfirm by rememberSaveable { mutableStateOf(false) }
@@ -146,19 +150,26 @@ private fun DetailContent(
                 letterAlpha = 0.14f,
             )
             TitleSection(media = media)
-            StatusSection(selected = media.status, onStatusSelected = onStatusSelected)
-            if (media.type != MediaType.FILM) {
-                EpisodesSection(
-                    seasons = seasons,
-                    selectedSeasonNumber = selectedSeasonNumber,
-                    episodes = episodes,
-                    isLoading = episodesLoading,
-                    errorMessage = episodesErrorMessage,
-                    onSeasonSelected = onSeasonSelected,
-                    onEpisodeWatchedToggled = onEpisodeWatchedToggled,
-                )
+            // Statut, retrait et épisodes n'ont de sens que pour un contenu réellement suivi :
+            // masqués tant que la fiche n'est qu'un aperçu ouvert depuis la Recherche (voir
+            // `DetailUiState.isInBacklog`).
+            if (isInBacklog) {
+                StatusSection(selected = media.status, onStatusSelected = onStatusSelected)
+                if (media.type != MediaType.FILM) {
+                    EpisodesSection(
+                        seasons = seasons,
+                        selectedSeasonNumber = selectedSeasonNumber,
+                        episodes = episodes,
+                        isLoading = episodesLoading,
+                        errorMessage = episodesErrorMessage,
+                        onSeasonSelected = onSeasonSelected,
+                        onEpisodeWatchedToggled = onEpisodeWatchedToggled,
+                    )
+                }
+                RemoveLink(onClick = { showRemoveConfirm = true })
+            } else {
+                AddButton(onClick = onAddMedia)
             }
-            RemoveLink(onClick = { showRemoveConfirm = true })
         }
     }
 
@@ -392,6 +403,25 @@ private fun EpisodeThumbnail(stillUrl: String?) {
 }
 
 @Composable
+private fun AddButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(AccentPurple)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = stringResource(R.string.detail_add_action),
+            style = PelliculeTextStyles.statusPillLabel,
+            color = TextPrimary,
+        )
+    }
+}
+
+@Composable
 private fun RemoveLink(onClick: () -> Unit) {
     Box(
         modifier = Modifier
@@ -447,6 +477,7 @@ private fun DetailContentPreview() {
     PelliculeTheme {
         DetailContent(
             media = media,
+            isInBacklog = true,
             seasons = listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 2, posterUrl = null)),
             selectedSeasonNumber = 1,
             episodes = episodes,
@@ -457,6 +488,30 @@ private fun DetailContentPreview() {
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
             onRemoveMedia = {},
+            onAddMedia = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A0812)
+@Composable
+private fun DetailContentApercuPreview() {
+    val media = Media(title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.A_VOIR, releaseYear = 1997)
+    PelliculeTheme {
+        DetailContent(
+            media = media,
+            isInBacklog = false,
+            seasons = emptyList(),
+            selectedSeasonNumber = null,
+            episodes = emptyList(),
+            episodesLoading = false,
+            episodesErrorMessage = null,
+            onBackClick = {},
+            onStatusSelected = {},
+            onSeasonSelected = {},
+            onEpisodeWatchedToggled = {},
+            onRemoveMedia = {},
+            onAddMedia = {},
         )
     }
 }

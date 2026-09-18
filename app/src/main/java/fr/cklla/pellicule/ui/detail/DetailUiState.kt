@@ -12,4 +12,12 @@ data class DetailUiState(
     val episodes: List<EpisodeUiModel> = emptyList(),
     val episodesLoading: Boolean = false,
     val episodesErrorMessage: String? = null,
-)
+) {
+    /**
+     * Vrai une fois le contenu réellement présent dans le suivi (id non vide). Faux quand la
+     * fiche est ouverte en aperçu depuis un résultat de Recherche pas encore ajouté (voir
+     * `DetailViewModel`) : dans ce cas, `DetailScreen` masque statut/retrait/épisodes et affiche
+     * un bouton "Ajouter" à la place.
+     */
+    val isInBacklog: Boolean get() = !media?.id.isNullOrEmpty()
+}

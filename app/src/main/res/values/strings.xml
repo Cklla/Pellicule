@@ -29,6 +29,7 @@
     <!-- Écran Détail -->
     <string name="detail_back">Retour à la bibliothèque</string>
     <string name="detail_status_label">Statut</string>
+    <string name="detail_add_action">Ajouter au suivi</string>
     <string name="detail_remove_action">Retirer du suivi</string>
     <string name="detail_remove_confirm_title">Retirer ce contenu du suivi ?</string>
     <string name="detail_remove_confirm_message">Cette action est définitive : le contenu et son statut seront supprimés.</string>
