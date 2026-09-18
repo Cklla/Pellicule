@@ -21,6 +21,15 @@ val localProperties = Properties().apply {
     }
 }
 
+// Identifiants du keystore de release : absent en configuration debug, donc chargé de façon
+// optionnelle : un simple ./gradlew assembleDebug ne nécessite pas ce fichier.
+val keystoreProperties = Properties().apply {
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+
 android {
     namespace = "fr.cklla.pellicule"
     compileSdk {
@@ -43,10 +52,32 @@ android {
         )
     }
 
+    signingConfigs {
+        // Défini uniquement si keystore.properties existe : permet à assembleRelease de fonctionner
+        // ailleurs (CI, autre machine) sans configuration de signature, tant qu'on ne publie pas
+        // depuis là.
+        if (keystoreProperties.isNotEmpty()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             optimization {
-                enable = false
+                enable = true
+            }
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+            if (keystoreProperties.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }
