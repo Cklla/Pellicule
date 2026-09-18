@@ -10,11 +10,13 @@ import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
 import fr.cklla.pellicule.data.repository.JellyfinRepositoryImpl
 import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
 import fr.cklla.pellicule.data.repository.MediaSearchRepositoryImpl
+import fr.cklla.pellicule.data.repository.SynopsisRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvDetailsRepositoryImpl
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.repository.MediaSearchRepository
+import fr.cklla.pellicule.domain.repository.SynopsisRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
 import javax.inject.Singleton
 
@@ -39,6 +41,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTvDetailsRepository(impl: TvDetailsRepositoryImpl): TvDetailsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSynopsisRepository(impl: SynopsisRepositoryImpl): SynopsisRepository
 
     @Binds
     @Singleton

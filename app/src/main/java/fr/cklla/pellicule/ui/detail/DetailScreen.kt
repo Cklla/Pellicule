@@ -96,6 +96,7 @@ fun DetailScreen(
     DetailContent(
         media = media,
         isInBacklog = uiState.isInBacklog,
+        synopsis = uiState.synopsis,
         seasons = uiState.seasons,
         selectedSeasonNumber = uiState.selectedSeasonNumber,
         episodes = uiState.episodes,
@@ -116,6 +117,7 @@ fun DetailScreen(
 private fun DetailContent(
     media: Media,
     isInBacklog: Boolean,
+    synopsis: String?,
     seasons: List<Season>,
     selectedSeasonNumber: Int?,
     episodes: List<EpisodeUiModel>,
@@ -155,6 +157,11 @@ private fun DetailContent(
                 letterAlpha = 0.14f,
             )
             TitleSection(media = media)
+            // Visible dès l'aperçu (pas besoin d'être suivi pour lire de quoi ça parle), masqué
+            // tant que le synopsis n'est pas encore arrivé de TMDB plutôt que d'afficher un vide.
+            if (!synopsis.isNullOrBlank()) {
+                SynopsisSection(synopsis = synopsis)
+            }
             // Statut, retrait et épisodes n'ont de sens que pour un contenu réellement suivi :
             // masqués tant que la fiche n'est qu'un aperçu ouvert depuis la Recherche (voir
             // `DetailUiState.isInBacklog`).
@@ -231,6 +238,15 @@ private fun TitleSection(media: Media) {
             style = PelliculeTextStyles.detailSubtitle,
             color = TextTertiary,
         )
+    }
+}
+
+@Composable
+private fun SynopsisSection(synopsis: String) {
+    Column {
+        SectionLabel(stringResource(R.string.detail_synopsis_label))
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(text = synopsis, style = PelliculeTextStyles.detailSubtitle, color = TextTertiary)
     }
 }
 
@@ -513,6 +529,7 @@ private fun DetailContentPreview() {
         DetailContent(
             media = media,
             isInBacklog = true,
+            synopsis = "Une danseuse d'un groupe de pop japonais se lance dans une carrière d'actrice…",
             seasons = listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 2, posterUrl = null)),
             selectedSeasonNumber = 1,
             episodes = episodes,
@@ -537,6 +554,7 @@ private fun DetailContentApercuPreview() {
         DetailContent(
             media = media,
             isInBacklog = false,
+            synopsis = null,
             seasons = emptyList(),
             selectedSeasonNumber = null,
             episodes = emptyList(),

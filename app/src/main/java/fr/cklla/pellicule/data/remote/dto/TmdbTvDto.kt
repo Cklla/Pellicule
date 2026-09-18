@@ -3,10 +3,11 @@ package fr.cklla.pellicule.data.remote.dto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/** Réponse de `GET /tv/{tv_id}` : seul le champ `seasons` est utile ici (liste des saisons). */
+/** Réponse de `GET /tv/{tv_id}` : liste des saisons et synopsis. */
 @JsonClass(generateAdapter = true)
 data class TmdbTvDetailsDto(
     @Json(name = "seasons") val seasons: List<TmdbSeasonSummaryDto> = emptyList(),
+    @Json(name = "overview") val overview: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

@@ -53,12 +53,14 @@ class DetailViewModelTest {
         tvDetailsRepository: FakeTvDetailsRepository = FakeTvDetailsRepository(),
         episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
+        synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf(PelliculeDestinations.DETAIL_ARG_MEDIA_ID to mediaId)),
         mediaRepository = mediaRepository,
         tvDetailsRepository = tvDetailsRepository,
         episodeRepository = episodeRepository,
         jellyfinRepository = jellyfinRepository,
+        synopsisRepository = synopsisRepository,
     )
 
     private fun previewViewModelFor(
@@ -71,6 +73,7 @@ class DetailViewModelTest {
         tvDetailsRepository: FakeTvDetailsRepository = FakeTvDetailsRepository(),
         episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
+        synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(
             mapOf(
@@ -85,6 +88,7 @@ class DetailViewModelTest {
         tvDetailsRepository = tvDetailsRepository,
         episodeRepository = episodeRepository,
         jellyfinRepository = jellyfinRepository,
+        synopsisRepository = synopsisRepository,
     )
 
     @Test
@@ -118,6 +122,33 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertNull(viewModel.uiState.value.media)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `ouvrir une fiche suivie charge son synopsis`() = runTest {
+        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val addResult = repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 1))
+        val mediaId = (addResult as Resource.Success).data
+        val synopsisRepository = FakeSynopsisRepository().apply { response = Resource.Success("Paul Atréides...") }
+
+        val viewModel = viewModelFor(mediaId, repository, synopsisRepository = synopsisRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Paul Atréides...", viewModel.uiState.value.synopsis)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `ouvrir un apercu charge aussi son synopsis`() = runTest {
+        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val synopsisRepository = FakeSynopsisRepository().apply { response = Resource.Success("Un employé découpe son esprit...") }
+        val viewModel = previewViewModelFor(repository, tmdbId = 42, synopsisRepository = synopsisRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Un employé découpe son esprit...", viewModel.uiState.value.synopsis)
         collectorJob.cancel()
     }
 
@@ -252,6 +283,7 @@ class DetailViewModelTest {
             tvDetailsRepository = FakeTvDetailsRepository(),
             episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
             jellyfinRepository = FakeJellyfinRepository(),
+            synopsisRepository = FakeSynopsisRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()

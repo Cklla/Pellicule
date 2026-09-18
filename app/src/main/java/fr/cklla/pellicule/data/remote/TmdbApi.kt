@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.data.remote
 
+import fr.cklla.pellicule.data.remote.dto.TmdbMovieDetailsDto
 import fr.cklla.pellicule.data.remote.dto.TmdbSearchResponseDto
 import fr.cklla.pellicule.data.remote.dto.TmdbSeasonDto
 import fr.cklla.pellicule.data.remote.dto.TmdbTvDetailsDto
@@ -24,13 +25,21 @@ interface TmdbApi {
         @Query("include_adult") includeAdult: Boolean = false,
     ): TmdbSearchResponseDto
 
-    /** Détail d'une série (film ou anime "série" chez nous) : utilisé ici pour sa liste de saisons. */
+    /** Détail d'une série (film ou anime "série" chez nous) : utilisé ici pour sa liste de saisons et son synopsis. */
     @GET("tv/{tv_id}")
     suspend fun getTvDetails(
         @Path("tv_id") tvId: Long,
         @Query("api_key") apiKey: String,
         @Query("language") language: String = "fr-FR",
     ): TmdbTvDetailsDto
+
+    /** Détail d'un film : utilisé ici pour son synopsis. */
+    @GET("movie/{movie_id}")
+    suspend fun getMovieDetails(
+        @Path("movie_id") movieId: Long,
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String = "fr-FR",
+    ): TmdbMovieDetailsDto
 
     /** Liste des épisodes d'une saison donnée. */
     @GET("tv/{tv_id}/season/{season_number}")

@@ -6,6 +6,8 @@ import fr.cklla.pellicule.domain.model.Season
 data class DetailUiState(
     val isLoading: Boolean = true,
     val media: Media? = null,
+    /** Synopsis TMDB, récupéré à l'ouverture de la fiche ; `null` tant qu'il n'est pas encore chargé. */
+    val synopsis: String? = null,
     /** Saisons disponibles pour une série/anime ; toujours vide pour un FILM. */
     val seasons: List<Season> = emptyList(),
     val selectedSeasonNumber: Int? = null,

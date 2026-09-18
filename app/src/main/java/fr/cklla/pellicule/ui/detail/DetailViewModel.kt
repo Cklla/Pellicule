@@ -16,6 +16,7 @@ import fr.cklla.pellicule.domain.model.toMedia
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
+import fr.cklla.pellicule.domain.repository.SynopsisRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import javax.inject.Inject
@@ -58,6 +59,7 @@ class DetailViewModel @Inject constructor(
     private val tvDetailsRepository: TvDetailsRepository,
     private val episodeRepository: EpisodeRepository,
     private val jellyfinRepository: JellyfinRepository,
+    private val synopsisRepository: SynopsisRepository,
 ) : ViewModel() {
 
     private val mediaId: String? = savedStateHandle[PelliculeDestinations.DETAIL_ARG_MEDIA_ID]
@@ -65,6 +67,7 @@ class DetailViewModel @Inject constructor(
 
     private val workingMedia = MutableStateFlow(previewResult?.toMedia())
     private val isLoading = MutableStateFlow(mediaId != null)
+    private val synopsis = MutableStateFlow<String?>(null)
 
     private val seasons = MutableStateFlow<List<Season>>(emptyList())
     private val selectedSeasonNumber = MutableStateFlow<Int?>(null)
@@ -75,10 +78,14 @@ class DetailViewModel @Inject constructor(
         val id = mediaId
         if (id != null) {
             viewModelScope.launch {
-                workingMedia.value = mediaRepository.observeMediaById(id).first()
+                val media = mediaRepository.observeMediaById(id).first()
+                workingMedia.value = media
                 isLoading.value = false
                 loadSeasonsIfApplicable()
+                media?.let(::fetchSynopsis)
             }
+        } else {
+            workingMedia.value?.let(::fetchSynopsis)
         }
 
         viewModelScope.launch {
@@ -108,6 +115,15 @@ class DetailViewModel @Inject constructor(
                 defaultSeason?.let { selectedSeasonNumber.value = it.seasonNumber }
             }
             is Resource.Error -> episodesResult.value = result
+        }
+    }
+
+    /** Synopsis TMDB, jamais mis en cache localement : rechargé à chaque ouverture de la fiche. */
+    private fun fetchSynopsis(media: Media) {
+        val tmdbId = media.tmdbId ?: return
+        viewModelScope.launch {
+            val result = synopsisRepository.getSynopsis(tmdbId, media.type)
+            if (result is Resource.Success) synopsis.value = result.data
         }
     }
 
@@ -142,16 +158,21 @@ class DetailViewModel @Inject constructor(
         )
     }
 
+    // `combine` n'a pas d'overload à 6 flux typés : `workingMedia` et `synopsis` sont regroupés en
+    // amont pour rester dans la limite des 5 arguments du `combine` final.
+    private val mediaSection = combine(workingMedia, synopsis) { media, syn -> media to syn }
+
     val uiState: StateFlow<DetailUiState> = combine(
         isLoading,
-        workingMedia,
+        mediaSection,
         seasons,
         selectedSeasonNumber,
         episodesSection,
-    ) { loading, media, seasonList, selectedSeason, episodesState ->
+    ) { loading, (media, syn), seasonList, selectedSeason, episodesState ->
         DetailUiState(
             isLoading = loading,
             media = media,
+            synopsis = syn,
             seasons = seasonList,
             selectedSeasonNumber = selectedSeason,
             episodes = episodesState.episodes,
