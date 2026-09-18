@@ -66,6 +66,49 @@ class JellyfinRepositoryImplTest {
     }
 
     @Test
+    fun `une adresse sans schema est refusee sans appel reseau`() = runTest {
+        // Le serveur répondrait avec succès : seule la validation d'URL peut faire échouer ce cas.
+        val api = FakeJellyfinApi().apply {
+            authResponse = JellyfinAuthResponseDto(accessToken = "token-abc", user = JellyfinUserDto(id = "user-1", name = "stef"))
+        }
+        val sessionStore = FakeJellyfinSessionStore()
+        val repository = repository(api, sessionStore)
+
+        val result = repository.connect("192.168.1.10:8096", "stef", "secret")
+
+        assertTrue(result is Resource.Error)
+        assertNull(sessionStore.session.first())
+    }
+
+    @Test
+    fun `une adresse avec un schema non http est refusee`() = runTest {
+        val api = FakeJellyfinApi().apply {
+            authResponse = JellyfinAuthResponseDto(accessToken = "token-abc", user = JellyfinUserDto(id = "user-1", name = "stef"))
+        }
+        val sessionStore = FakeJellyfinSessionStore()
+        val repository = repository(api, sessionStore)
+
+        val result = repository.connect("file:///data/local/tmp", "stef", "secret")
+
+        assertTrue(result is Resource.Error)
+        assertNull(sessionStore.session.first())
+    }
+
+    @Test
+    fun `une adresse http en clair reste acceptee`() = runTest {
+        val api = FakeJellyfinApi().apply {
+            authResponse = JellyfinAuthResponseDto(accessToken = "token-abc", user = JellyfinUserDto(id = "user-1", name = "stef"))
+        }
+        val sessionStore = FakeJellyfinSessionStore()
+        val repository = repository(api, sessionStore)
+
+        val result = repository.connect("http://192.168.1.10:8096", "stef", "secret")
+
+        assertTrue(result is Resource.Success)
+        assertEquals("http://192.168.1.10:8096", sessionStore.session.first()?.serverUrl)
+    }
+
+    @Test
     fun `syncTrackedSeries resout l'id Jellyfin et reconcilie les episodes vus`() = runTest {
         val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val mediaId = (mediaRepository.addMedia(
