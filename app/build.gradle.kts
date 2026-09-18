@@ -1,9 +1,21 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.androidx.room)
+}
+
+// La clé API TMDB vit uniquement dans local.properties, jamais dans le code source. On l'expose
+// au code Kotlin via un champ BuildConfig généré à la compilation.
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        FileInputStream(localPropertiesFile).use { load(it) }
+    }
 }
 
 android {
@@ -20,6 +32,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "TMDB_API_KEY",
+            "\"${localProperties.getProperty("TMDB_API_KEY", "")}\"",
+        )
     }
 
     buildTypes {
@@ -35,6 +53,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -70,8 +89,15 @@ dependencies {
     ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
-    // Chargement des jaquettes réelles une fois la recherche TMDB branchée
+    // Chargement des jaquettes réelles renvoyées par TMDB
     implementation(libs.coil.compose)
+
+    // Réseau : recherche de contenus via l'API TMDB (seul usage de Retrofit/Moshi, le suivi
+    // lui-même reste stocké via Room/Firestore).
+    implementation(libs.retrofit.core)
+    implementation(libs.retrofit.converter.moshi)
+    implementation(libs.moshi.kotlin)
+    implementation(libs.okhttp.logging.interceptor)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

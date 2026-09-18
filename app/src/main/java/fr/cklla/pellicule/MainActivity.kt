@@ -87,7 +87,18 @@ fun PelliculeApp() {
                     },
                 )
             }
-            composable(PelliculeDestinations.RECHERCHE) { RechercheScreen() }
+            composable(PelliculeDestinations.RECHERCHE) {
+                RechercheScreen(
+                    onResultClick = { _, trackedMediaId ->
+                        // Pas encore de flux "aperçu" pour un résultat non ajouté (voir
+                        // DetailScreen, qui ne gère que le cas "contenu déjà suivi") : le clic
+                        // n'ouvre la fiche que pour un résultat déjà présent dans le suivi.
+                        if (trackedMediaId != null) {
+                            navController.navigate(PelliculeDestinations.detailRoute(trackedMediaId))
+                        }
+                    },
+                )
+            }
             composable(PelliculeDestinations.STATS) { StatsScreen() }
             composable(
                 route = PelliculeDestinations.DETAIL,

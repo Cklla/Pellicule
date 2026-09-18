@@ -39,7 +39,23 @@
     <string name="nav_recherche">Recherche</string>
     <string name="nav_stats">Stats</string>
 
+    <!-- Écran Recherche -->
+    <string name="recherche_kicker">base TMDB</string>
+    <string name="recherche_title">Rechercher</string>
+    <string name="recherche_search_placeholder">Titre du film, de la série…</string>
+    <string name="recherche_suggestions_label">Suggestions</string>
+    <string name="recherche_empty_title">Aucun résultat</string>
+    <string name="recherche_empty_message">Aucun contenu ne correspond à « %1$s ». Essaie un autre titre.</string>
+    <string name="recherche_add_content_description">Ajouter « %1$s » au suivi</string>
+    <string name="recherche_added_label">Ajouté</string>
+    <string-array name="recherche_suggestions">
+        <item>Dune</item>
+        <item>Breaking Bad</item>
+        <item>One Piece</item>
+        <item>Oppenheimer</item>
+        <item>The Bear</item>
+    </string-array>
+
     <!-- Placeholders (écrans à construire) -->
-    <string name="recherche_placeholder">Recherche TMDB à venir.</string>
     <string name="stats_placeholder">Statistiques à venir.</string>
 </resources>
