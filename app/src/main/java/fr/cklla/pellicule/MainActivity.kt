@@ -65,8 +65,8 @@ class MainActivity : ComponentActivity() {
 // `LoginScreen` à la place du `NavHost` — pas une destination de plus dans le graphe de
 // navigation, un vrai "portail" en dehors de la pile. Dès que `AuthRepository.currentUser` devient
 // non-null (connexion réussie), la recomposition bascule automatiquement sur le NavHost normal,
-// qui démarre toujours sur la Bibliothèque. Jellyfin reste indépendant de ce compte (voir
-// CLAUDE.md) : sa connexion propre se fait séparément depuis l'onglet Compte.
+// qui démarre toujours sur la Bibliothèque. Jellyfin reste indépendant de ce compte Google : sa
+// connexion propre se fait séparément depuis l'onglet Compte.
 @Composable
 fun PelliculeApp(authGateViewModel: AuthGateViewModel = hiltViewModel()) {
     val currentUser by authGateViewModel.currentUser.collectAsStateWithLifecycle()
