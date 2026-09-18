@@ -1,0 +1,22 @@
+package fr.cklla.pellicule.domain.model
+
+/**
+ * Représente un contenu (film, série ou anime) suivi par l'utilisateur, tel que manipulé par
+ * l'UI et les ViewModels.
+ *
+ * C'est le modèle "métier" : il ne dépend ni de Room (entité base de données) ni de Firestore, ni
+ * de TMDB (réponse API). Le Repository fait la conversion entre ces représentations et ce modèle.
+ *
+ * @param id identifiant du contenu (UUID généré à la création) — chaîne vide si pas encore
+ *   persisté. Sert aussi d'identifiant de document Firestore une fois la synchro cloud en place.
+ * @param tmdbId identifiant TMDB du contenu, ou `null` si ajouté sans passer par la recherche.
+ */
+data class Media(
+    val id: String = "",
+    val title: String,
+    val type: MediaType,
+    val status: WatchStatus,
+    val tmdbId: Long? = null,
+    val releaseYear: Int? = null,
+    val posterUrl: String? = null,
+)

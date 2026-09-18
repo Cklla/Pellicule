@@ -1,3 +1,16 @@
 <resources>
     <string name="app_name">Pellicule</string>
+
+    <!-- Bibliothèque -->
+    <string name="bibliotheque_title">Bibliothèque</string>
+    <string name="empty_title">Rien par ici</string>
+    <string name="empty_message_bibliotheque">Ton suivi est vide pour l\'instant. Ajoute un premier film, une série ou un anime depuis la recherche.</string>
+
+    <!-- Navigation basse -->
+    <string name="nav_recherche">Recherche</string>
+    <string name="nav_stats">Stats</string>
+
+    <!-- Placeholders (écrans à construire) -->
+    <string name="recherche_placeholder">Recherche TMDB à venir.</string>
+    <string name="stats_placeholder">Statistiques à venir.</string>
 </resources>
