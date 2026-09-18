@@ -21,6 +21,7 @@ fun MediaEntity.toDomain(): Media = Media(
     releaseYear = releaseYear,
     posterUrl = posterUrl,
     jellyfinId = jellyfinId,
+    rating = rating,
 )
 
 fun Media.toEntity(): MediaEntity = MediaEntity(
@@ -32,4 +33,5 @@ fun Media.toEntity(): MediaEntity = MediaEntity(
     releaseYear = releaseYear,
     posterUrl = posterUrl,
     jellyfinId = jellyfinId,
+    rating = rating,
 )

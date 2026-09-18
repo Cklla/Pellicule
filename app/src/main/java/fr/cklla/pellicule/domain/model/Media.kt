@@ -13,6 +13,7 @@ package fr.cklla.pellicule.domain.model
  * @param jellyfinId identifiant de l'item correspondant sur le serveur Jellyfin connecté, résolu
  *   et mis en cache une fois trouvé (voir `JellyfinRepository`) — `null` tant que la résolution
  *   n'a pas eu lieu, ou si aucun serveur Jellyfin n'est connecté.
+ * @param rating note personnelle de 1 à 5, ou `null` si le contenu n'est pas encore noté.
  */
 data class Media(
     val id: String = "",
@@ -23,4 +24,5 @@ data class Media(
     val releaseYear: Int? = null,
     val posterUrl: String? = null,
     val jellyfinId: String? = null,
+    val rating: Int? = null,
 )

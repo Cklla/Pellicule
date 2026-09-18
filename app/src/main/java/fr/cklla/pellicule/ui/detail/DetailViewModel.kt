@@ -166,6 +166,11 @@ class DetailViewModel @Inject constructor(
 
     fun onStatusSelected(status: WatchStatus) = applyEdit { it.copy(status = status) }
 
+    // `rating = null` correspond à "aucune note" : cliquer sur l'étoile qui représente déjà la
+    // note actuelle (voir `RatingSection`) doit pouvoir revenir à cet état, pas seulement en
+    // choisir une nouvelle.
+    fun onRatingSelected(rating: Int?) = applyEdit { it.copy(rating = rating) }
+
     fun onSeasonSelected(seasonNumber: Int) {
         selectedSeasonNumber.value = seasonNumber
     }

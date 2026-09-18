@@ -11,6 +11,7 @@ import fr.cklla.pellicule.data.local.AppDatabase
 import fr.cklla.pellicule.data.local.EpisodeDao
 import fr.cklla.pellicule.data.local.MIGRATION_1_2
 import fr.cklla.pellicule.data.local.MIGRATION_2_3
+import fr.cklla.pellicule.data.local.MIGRATION_3_4
 import fr.cklla.pellicule.data.local.MediaDao
 import javax.inject.Singleton
 
@@ -23,7 +24,7 @@ object DatabaseModule {
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "pellicule.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 
     @Provides

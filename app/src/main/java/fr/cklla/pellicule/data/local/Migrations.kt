@@ -32,3 +32,10 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         connection.execSQL("ALTER TABLE `media` ADD COLUMN `jellyfinId` TEXT")
     }
 }
+
+/** Ajoute la note personnelle (1 à 5) éditable sur la fiche détail. */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `media` ADD COLUMN `rating` INTEGER")
+    }
+}

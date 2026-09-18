@@ -22,4 +22,5 @@ data class MediaEntity(
     val releaseYear: Int?,
     val posterUrl: String?,
     val jellyfinId: String? = null,
+    val rating: Int? = null,
 )

@@ -25,7 +25,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -59,6 +61,7 @@ import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.ui.components.MediaCoverPlaceholder
 import fr.cklla.pellicule.ui.labelRes
 import fr.cklla.pellicule.ui.theme.AccentPurple
+import fr.cklla.pellicule.ui.theme.AccentPurpleMuted
 import fr.cklla.pellicule.ui.theme.BackgroundDark
 import fr.cklla.pellicule.ui.theme.BorderHairline
 import fr.cklla.pellicule.ui.theme.ErrorCoral
@@ -100,6 +103,7 @@ fun DetailScreen(
         episodesErrorMessage = uiState.episodesErrorMessage,
         onBackClick = onBackClick,
         onStatusSelected = viewModel::onStatusSelected,
+        onRatingSelected = viewModel::onRatingSelected,
         onSeasonSelected = viewModel::onSeasonSelected,
         onEpisodeWatchedToggled = viewModel::onEpisodeWatchedToggled,
         onRemoveMedia = viewModel::onRemoveMedia,
@@ -119,6 +123,7 @@ private fun DetailContent(
     episodesErrorMessage: String?,
     onBackClick: () -> Unit,
     onStatusSelected: (WatchStatus) -> Unit,
+    onRatingSelected: (Int?) -> Unit,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeWatchedToggled: (EpisodeUiModel) -> Unit,
     onRemoveMedia: () -> Unit,
@@ -155,6 +160,7 @@ private fun DetailContent(
             // `DetailUiState.isInBacklog`).
             if (isInBacklog) {
                 StatusSection(selected = media.status, onStatusSelected = onStatusSelected)
+                RatingSection(rating = media.rating, onRatingSelected = onRatingSelected)
                 if (media.type != MediaType.FILM) {
                     EpisodesSection(
                         seasons = seasons,
@@ -275,6 +281,35 @@ private fun StatusPill(status: WatchStatus, selected: Boolean, onClick: () -> Un
             color = if (selected) BackgroundDark else palette.color,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
         )
+    }
+}
+
+@Composable
+private fun RatingSection(rating: Int?, onRatingSelected: (Int?) -> Unit) {
+    Column {
+        SectionLabel(stringResource(R.string.detail_rating_label))
+        Spacer(modifier = Modifier.height(10.dp))
+        Row {
+            for (star in 1..5) {
+                val filled = rating != null && star <= rating
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        // Recliquer sur l'étoile qui correspond déjà à la note actuelle efface la
+                        // note (ex. contenu noté 1 étoile : cliquer à nouveau sur la 1ère étoile
+                        // revient à "aucune note") plutôt que de la reconfirmer sans effet visible.
+                        .clickable(onClick = { onRatingSelected(if (rating == star) null else star) }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.Star,
+                        contentDescription = stringResource(R.string.detail_rating_star_content_description, star),
+                        tint = if (filled) AccentPurple else AccentPurpleMuted,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -485,6 +520,7 @@ private fun DetailContentPreview() {
             episodesErrorMessage = null,
             onBackClick = {},
             onStatusSelected = {},
+            onRatingSelected = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
             onRemoveMedia = {},
@@ -508,6 +544,7 @@ private fun DetailContentApercuPreview() {
             episodesErrorMessage = null,
             onBackClick = {},
             onStatusSelected = {},
+            onRatingSelected = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
             onRemoveMedia = {},
