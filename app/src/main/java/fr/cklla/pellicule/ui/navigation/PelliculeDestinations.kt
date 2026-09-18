@@ -15,6 +15,7 @@ object PelliculeDestinations {
     const val BIBLIOTHEQUE = "bibliotheque"
     const val RECHERCHE = "recherche"
     const val STATS = "stats"
+    const val JELLYFIN_SETTINGS = "jellyfin-settings"
 
     const val DETAIL_ARG_MEDIA_ID = "mediaId"
     const val DETAIL = "detail/{$DETAIL_ARG_MEDIA_ID}"

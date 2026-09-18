@@ -9,12 +9,17 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import dagger.hilt.android.AndroidEntryPoint
 import fr.cklla.pellicule.ui.AppTab
 import androidx.navigation.NavType
@@ -22,10 +27,12 @@ import androidx.navigation.navArgument
 import fr.cklla.pellicule.ui.bibliotheque.BibliothequeScreen
 import fr.cklla.pellicule.ui.components.BottomNavBar
 import fr.cklla.pellicule.ui.detail.DetailScreen
+import fr.cklla.pellicule.ui.jellyfin.JellyfinSettingsScreen
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import fr.cklla.pellicule.ui.navigation.route
 import fr.cklla.pellicule.ui.recherche.RechercheScreen
 import fr.cklla.pellicule.ui.stats.StatsScreen
+import fr.cklla.pellicule.ui.sync.AppSyncViewModel
 import fr.cklla.pellicule.ui.theme.BackgroundDark
 import fr.cklla.pellicule.ui.theme.PelliculeTheme
 
@@ -57,6 +64,19 @@ fun PelliculeApp() {
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     val selectedTab = AppTab.entries.find { it.route == currentRoute }
+
+    // Synchro Jellyfin (statut vu des épisodes) à chaque ouverture/reprise de l'app, pas
+    // seulement pour la série consultée (voir `AppSyncViewModel`) — no-op si aucun serveur n'est
+    // connecté.
+    val syncViewModel: AppSyncViewModel = hiltViewModel()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) syncViewModel.onAppResumed()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         containerColor = BackgroundDark,
@@ -96,7 +116,14 @@ fun PelliculeApp() {
                     },
                 )
             }
-            composable(PelliculeDestinations.STATS) { StatsScreen() }
+            composable(PelliculeDestinations.STATS) {
+                StatsScreen(
+                    onJellyfinSettingsClick = { navController.navigate(PelliculeDestinations.JELLYFIN_SETTINGS) },
+                )
+            }
+            composable(PelliculeDestinations.JELLYFIN_SETTINGS) {
+                JellyfinSettingsScreen(onBackClick = { navController.popBackStack() })
+            }
             composable(
                 route = PelliculeDestinations.DETAIL,
                 arguments = listOf(navArgument(PelliculeDestinations.DETAIL_ARG_MEDIA_ID) { type = NavType.StringType }),

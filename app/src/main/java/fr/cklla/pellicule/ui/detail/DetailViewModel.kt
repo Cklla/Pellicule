@@ -14,6 +14,7 @@ import fr.cklla.pellicule.domain.model.Season
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.model.toMedia
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
+import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
@@ -56,6 +57,7 @@ class DetailViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val tvDetailsRepository: TvDetailsRepository,
     private val episodeRepository: EpisodeRepository,
+    private val jellyfinRepository: JellyfinRepository,
 ) : ViewModel() {
 
     private val mediaId: String? = savedStateHandle[PelliculeDestinations.DETAIL_ARG_MEDIA_ID]
@@ -169,13 +171,17 @@ class DetailViewModel @Inject constructor(
     }
 
     fun onEpisodeWatchedToggled(episode: EpisodeUiModel) {
-        val id = workingMedia.value?.id?.takeIf { it.isNotEmpty() } ?: return
+        val media = workingMedia.value?.takeIf { it.id.isNotEmpty() } ?: return
+        val watched = !episode.watched
         viewModelScope.launch {
             episodeRepository.setEpisodeWatched(
-                mediaId = id,
+                mediaId = media.id,
                 episode = EpisodeKey(episode.seasonNumber, episode.episodeNumber),
-                watched = !episode.watched,
+                watched = watched,
             )
+            // Best-effort, silencieux : voir `JellyfinRepository.pushEpisodeWatched` (no-op sans
+            // session active, un prochain sync global rattrape un éventuel échec réseau).
+            jellyfinRepository.pushEpisodeWatched(media, episode.seasonNumber, episode.episodeNumber, watched)
         }
     }
 

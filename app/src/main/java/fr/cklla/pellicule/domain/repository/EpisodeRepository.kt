@@ -18,4 +18,11 @@ interface EpisodeRepository {
 
     /** Marque un épisode vu ou non vu pour un contenu suivi. */
     suspend fun setEpisodeWatched(mediaId: String, episode: EpisodeKey, watched: Boolean): Resource<Unit>
+
+    /**
+     * Remplace l'intégralité du set d'épisodes vus d'un contenu suivi par [watched], en une seule
+     * transaction. Utilisé par la synchro Jellyfin (voir `JellyfinRepository.syncTrackedSeries`),
+     * qui fait foi côté lecture plutôt que de rejouer des toggles un par un.
+     */
+    suspend fun replaceWatchedEpisodes(mediaId: String, watched: Set<EpisodeKey>): Resource<Unit>
 }

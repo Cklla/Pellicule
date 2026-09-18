@@ -25,3 +25,10 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         )
     }
 }
+
+/** Ajoute l'id de l'item correspondant sur un serveur Jellyfin connecté, résolu et mis en cache une fois trouvé (voir `JellyfinRepository`). */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `media` ADD COLUMN `jellyfinId` TEXT")
+    }
+}

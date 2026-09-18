@@ -64,4 +64,19 @@
 
     <!-- Placeholders (écrans à construire) -->
     <string name="stats_placeholder">Statistiques à venir.</string>
+
+    <!-- Écran Stats -->
+    <string name="stats_jellyfin_action">Connexion Jellyfin</string>
+    <string name="stats_jellyfin_connected">Connecté à %1$s</string>
+    <string name="stats_jellyfin_not_connected">Aucun serveur connecté</string>
+
+    <!-- Écran Connexion Jellyfin -->
+    <string name="jellyfin_kicker">synchro optionnelle</string>
+    <string name="jellyfin_title">Serveur Jellyfin</string>
+    <string name="jellyfin_server_url_placeholder">URL du serveur (https://…)</string>
+    <string name="jellyfin_username_placeholder">Nom d\'utilisateur</string>
+    <string name="jellyfin_password_placeholder">Mot de passe</string>
+    <string name="jellyfin_connect_action">Se connecter</string>
+    <string name="jellyfin_connected_label">Connecté</string>
+    <string name="jellyfin_disconnect_action">Se déconnecter</string>
 </resources>

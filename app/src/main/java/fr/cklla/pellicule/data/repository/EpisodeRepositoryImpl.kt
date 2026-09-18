@@ -29,4 +29,15 @@ class EpisodeRepositoryImpl @Inject constructor(
             onSuccess = { Resource.Success(Unit) },
             onFailure = { Resource.Error("Impossible de mettre à jour le statut de l'épisode.", it) },
         )
+
+    override suspend fun replaceWatchedEpisodes(mediaId: String, watched: Set<EpisodeKey>): Resource<Unit> =
+        runCatching {
+            episodeDao.replaceAllForMedia(
+                mediaId,
+                watched.map { WatchedEpisodeEntity(mediaId, it.seasonNumber, it.episodeNumber) },
+            )
+        }.fold(
+            onSuccess = { Resource.Success(Unit) },
+            onFailure = { Resource.Error("Impossible de synchroniser les épisodes vus.", it) },
+        )
 }

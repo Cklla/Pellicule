@@ -24,4 +24,12 @@ class FakeEpisodeDao : EpisodeDao {
             list.filterNot { it.mediaId == mediaId && it.seasonNumber == seasonNumber && it.episodeNumber == episodeNumber }
         }
     }
+
+    override suspend fun deleteAllForMedia(mediaId: String) {
+        watched.update { list -> list.filterNot { it.mediaId == mediaId } }
+    }
+
+    override suspend fun insertAll(episodes: List<WatchedEpisodeEntity>) {
+        watched.update { list -> list + episodes.filterNot { list.contains(it) } }
+    }
 }

@@ -21,4 +21,5 @@ data class MediaEntity(
     val tmdbId: Long?,
     val releaseYear: Int?,
     val posterUrl: String?,
+    val jellyfinId: String? = null,
 )

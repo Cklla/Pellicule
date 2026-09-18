@@ -99,6 +99,11 @@ dependencies {
     implementation(libs.moshi.kotlin)
     implementation(libs.okhttp.logging.interceptor)
 
+    // Stockage chiffré de la session Jellyfin (URL serveur, token d'accès utilisateur) : token
+    // réel d'un compte personnel, contrairement à la clé API TMDB (secret de build, non sensible
+    // côté utilisateur).
+    implementation(libs.androidx.security.crypto)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))

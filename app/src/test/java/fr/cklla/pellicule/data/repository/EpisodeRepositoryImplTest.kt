@@ -36,4 +36,25 @@ class EpisodeRepositoryImplTest {
 
         assertTrue(repository.observeWatchedEpisodes("media-2").first().isEmpty())
     }
+
+    @Test
+    fun `replaceWatchedEpisodes remplace entierement le set d'un contenu`() = runTest {
+        val repository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        repository.setEpisodeWatched("media-1", EpisodeKey(1, 1), watched = true)
+        repository.setEpisodeWatched("media-1", EpisodeKey(1, 2), watched = true)
+
+        repository.replaceWatchedEpisodes("media-1", setOf(EpisodeKey(1, 2), EpisodeKey(1, 3)))
+
+        assertEquals(setOf(EpisodeKey(1, 2), EpisodeKey(1, 3)), repository.observeWatchedEpisodes("media-1").first())
+    }
+
+    @Test
+    fun `replaceWatchedEpisodes ne touche pas les autres contenus`() = runTest {
+        val repository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        repository.setEpisodeWatched("media-2", EpisodeKey(1, 1), watched = true)
+
+        repository.replaceWatchedEpisodes("media-1", setOf(EpisodeKey(1, 5)))
+
+        assertEquals(setOf(EpisodeKey(1, 1)), repository.observeWatchedEpisodes("media-2").first())
+    }
 }

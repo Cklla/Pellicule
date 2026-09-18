@@ -4,11 +4,15 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import fr.cklla.pellicule.data.local.JellyfinSessionStore
+import fr.cklla.pellicule.data.local.JellyfinSessionStoreImpl
 import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
+import fr.cklla.pellicule.data.repository.JellyfinRepositoryImpl
 import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
 import fr.cklla.pellicule.data.repository.MediaSearchRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvDetailsRepositoryImpl
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
+import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.repository.MediaSearchRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
@@ -35,4 +39,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTvDetailsRepository(impl: TvDetailsRepositoryImpl): TvDetailsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindJellyfinRepository(impl: JellyfinRepositoryImpl): JellyfinRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindJellyfinSessionStore(impl: JellyfinSessionStoreImpl): JellyfinSessionStore
 }

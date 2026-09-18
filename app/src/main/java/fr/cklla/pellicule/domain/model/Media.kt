@@ -10,6 +10,9 @@ package fr.cklla.pellicule.domain.model
  * @param id identifiant du contenu (UUID généré à la création) — chaîne vide si pas encore
  *   persisté. Sert aussi d'identifiant de document Firestore une fois la synchro cloud en place.
  * @param tmdbId identifiant TMDB du contenu, ou `null` si ajouté sans passer par la recherche.
+ * @param jellyfinId identifiant de l'item correspondant sur le serveur Jellyfin connecté, résolu
+ *   et mis en cache une fois trouvé (voir `JellyfinRepository`) — `null` tant que la résolution
+ *   n'a pas eu lieu, ou si aucun serveur Jellyfin n'est connecté.
  */
 data class Media(
     val id: String = "",
@@ -19,4 +22,5 @@ data class Media(
     val tmdbId: Long? = null,
     val releaseYear: Int? = null,
     val posterUrl: String? = null,
+    val jellyfinId: String? = null,
 )

@@ -3,15 +3,18 @@ package fr.cklla.pellicule.ui.detail
 import androidx.lifecycle.SavedStateHandle
 import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
 import fr.cklla.pellicule.data.repository.FakeEpisodeDao
+import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
 import fr.cklla.pellicule.data.repository.FakeMediaDao
 import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
 import fr.cklla.pellicule.domain.model.EpisodeInfo
+import fr.cklla.pellicule.domain.model.JellyfinSession
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.Season
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
+import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,11 +52,13 @@ class DetailViewModelTest {
         mediaRepository: MediaRepositoryImpl,
         tvDetailsRepository: FakeTvDetailsRepository = FakeTvDetailsRepository(),
         episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
+        jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf(PelliculeDestinations.DETAIL_ARG_MEDIA_ID to mediaId)),
         mediaRepository = mediaRepository,
         tvDetailsRepository = tvDetailsRepository,
         episodeRepository = episodeRepository,
+        jellyfinRepository = jellyfinRepository,
     )
 
     private fun previewViewModelFor(
@@ -65,6 +70,7 @@ class DetailViewModelTest {
         posterUrl: String = "",
         tvDetailsRepository: FakeTvDetailsRepository = FakeTvDetailsRepository(),
         episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
+        jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(
             mapOf(
@@ -78,6 +84,7 @@ class DetailViewModelTest {
         mediaRepository = mediaRepository,
         tvDetailsRepository = tvDetailsRepository,
         episodeRepository = episodeRepository,
+        jellyfinRepository = jellyfinRepository,
     )
 
     @Test
@@ -244,6 +251,7 @@ class DetailViewModelTest {
             mediaRepository = repository,
             tvDetailsRepository = FakeTvDetailsRepository(),
             episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
+            jellyfinRepository = FakeJellyfinRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()
@@ -289,6 +297,66 @@ class DetailViewModelTest {
         assertEquals(1, state.seasons.size)
         assertEquals(1, state.episodes.size)
         assertEquals("Bon travail", state.episodes.first().title)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `marquer un episode vu pousse vers Jellyfin quand une session est active`() = runTest {
+        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val addResult = repository.addMedia(
+            Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
+        )
+        val mediaId = (addResult as Resource.Success).data
+        val tvDetailsRepository = FakeTvDetailsRepository().apply {
+            seasonsResponse = Resource.Success(listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 1, posterUrl = null)))
+            defaultEpisodesResponse = Resource.Success(
+                listOf(EpisodeInfo(seasonNumber = 1, episodeNumber = 1, title = "Bon travail", stillUrl = null)),
+            )
+        }
+        val jellyfinRepository = FakeJellyfinRepository().apply {
+            setSession(JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token"))
+        }
+
+        val viewModel = viewModelFor(mediaId, repository, tvDetailsRepository, jellyfinRepository = jellyfinRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onEpisodeWatchedToggled(viewModel.uiState.value.episodes.first())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, jellyfinRepository.pushedEpisodes.size)
+        val (media, episode, watched) = jellyfinRepository.pushedEpisodes.first()
+        assertEquals(mediaId, media.id)
+        assertEquals(1, episode.seasonNumber)
+        assertEquals(1, episode.episodeNumber)
+        assertTrue(watched)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `marquer un episode vu ne pousse rien sans session Jellyfin`() = runTest {
+        val repository = MediaRepositoryImpl(FakeMediaDao())
+        val addResult = repository.addMedia(
+            Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
+        )
+        val mediaId = (addResult as Resource.Success).data
+        val tvDetailsRepository = FakeTvDetailsRepository().apply {
+            seasonsResponse = Resource.Success(listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 1, posterUrl = null)))
+            defaultEpisodesResponse = Resource.Success(
+                listOf(EpisodeInfo(seasonNumber = 1, episodeNumber = 1, title = "Bon travail", stillUrl = null)),
+            )
+        }
+        val jellyfinRepository = FakeJellyfinRepository()
+
+        val viewModel = viewModelFor(mediaId, repository, tvDetailsRepository, jellyfinRepository = jellyfinRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onEpisodeWatchedToggled(viewModel.uiState.value.episodes.first())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(jellyfinRepository.pushedEpisodes.isEmpty())
+        assertTrue(viewModel.uiState.value.episodes.first().watched)
         collectorJob.cancel()
     }
 }
