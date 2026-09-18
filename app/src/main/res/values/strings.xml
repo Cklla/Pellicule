@@ -34,6 +34,11 @@
     <string name="detail_remove_confirm_message">Cette action est définitive : le contenu et son statut seront supprimés.</string>
     <string name="detail_remove_confirm_confirm">Retirer</string>
     <string name="detail_remove_confirm_cancel">Annuler</string>
+    <string name="detail_episodes_label">Épisodes</string>
+    <string name="detail_episode_number_label">Ép. %1$d</string>
+    <string name="detail_episodes_empty">Aucun épisode trouvé pour cette saison.</string>
+    <string name="detail_episode_mark_watched">Marquer vu</string>
+    <string name="detail_episode_mark_unwatched">Marquer non vu</string>
 
     <!-- Navigation basse -->
     <string name="nav_recherche">Recherche</string>
