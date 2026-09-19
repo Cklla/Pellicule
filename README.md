@@ -104,7 +104,7 @@ offline)             (sync distante)           (recherche TMDB,
   vide, le suivi local existant est uploadé automatiquement.
 - **Jellyfin, module indépendant** : aucune des fonctionnalités de base (suivi manuel, recherche,
   synchro cloud) ne dépend de Jellyfin. Quand un serveur est connecté, le pull (Jellyfin → Pellicule)
-  se déclenche à chaque reprise de l'app et fait foi sur le statut vu ; le push
+  se déclenche à chaque reprise de l'app et ne peut qu'ajouter du vu (jamais en retirer) ; le push
   (Pellicule → Jellyfin) est best-effort et se déclenche à chaque changement local.
 - Erreurs réseau/Firebase remontées du Repository sous forme d'erreurs structurées
   (`Resource.Success` / `Resource.Error`), traduites en message utilisateur côté UI.
@@ -280,9 +280,10 @@ app/src/main/java/fr/cklla/pellicule/
 - **Connexion Google obligatoire** dès le lancement : simplifie les règles de sécurité Firestore
   (un utilisateur = un espace de données) sans avoir à gérer de mot de passe dédié — indépendant de
   la connexion Jellyfin, qui reste elle entièrement optionnelle.
-- **Jellyfin fait foi côté lecture** : le pull remplace intégralement le statut vu local pour un
-  contenu suivi plutôt que de tenter une fusion fine par horodatage — suffisant pour un usage solo
-  (un seul utilisateur, un seul appareil actif à la fois en pratique).
+- **La synchro Jellyfin ne peut que faire progresser le suivi** : le pull ajoute les épisodes vus du
+  serveur sans jamais dévoir ce qui l'est déjà localement, ni faire régresser un statut — un serveur
+  réinstallé sans son historique ne peut pas effacer le suivi. Les retours en arrière se font depuis
+  l'app, qui démarque alors aussi côté Jellyfin.
 
 ## Confidentialité
 
