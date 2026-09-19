@@ -1,5 +1,7 @@
 package fr.cklla.pellicule.ui.jellyfin
 
+import fr.cklla.pellicule.domain.model.JellyfinPushHistoryResult
+
 data class JellyfinSettingsUiState(
     val serverUrl: String = "",
     val username: String = "",
@@ -14,4 +16,7 @@ data class JellyfinSettingsUiState(
     /** `null` tant qu'aucun serveur n'est connecté ; sinon nom d'utilisateur affiché comme statut. */
     val connectedUsername: String? = null,
     val connectedServerUrl: String? = null,
+    val isPushingHistory: Boolean = false,
+    /** Résultat de la dernière réinjection d'historique, affiché tant qu'aucune nouvelle action n'a été lancée. */
+    val pushHistoryResult: JellyfinPushHistoryResult? = null,
 )

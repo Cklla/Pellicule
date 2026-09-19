@@ -347,4 +347,118 @@ class JellyfinRepositoryImplTest {
         assertTrue(api.playedUrls.isEmpty())
         assertNotNull(media)
     }
+
+    @Test
+    fun `syncTrackedSeries ne fait pas regresser un statut VU et garde les episodes deja vus quand Jellyfin a perdu son historique`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Arcane", type = MediaType.SERIE, status = WatchStatus.VU, tmdbId = 94605, jellyfinId = "jf-series-1"),
+        ) as Resource.Success).data
+        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 1), watched = true)
+        episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 2), watched = true)
+
+        // Serveur réinstallé : l'item est retrouvé (même id), mais son historique de lecture est
+        // reparti de zéro (tous les épisodes reviennent "non vus").
+        val api = FakeJellyfinApi().apply {
+            episodesBySeriesId = mapOf(
+                "jf-series-1" to listOf(
+                    JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 1, episodeNumber = 1, userData = JellyfinUserDataDto(played = false)),
+                    JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 1, episodeNumber = 2, userData = JellyfinUserDataDto(played = false)),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)), episodeRepository.observeWatchedEpisodes(mediaId).first())
+        assertEquals(WatchStatus.VU, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
+    fun `syncTrackedMovies ne fait pas regresser un statut VU quand Jellyfin rapporte le film non vu`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.VU, tmdbId = 438631, jellyfinId = "jf-movie-1"),
+        ) as Resource.Success).data
+        val api = FakeJellyfinApi().apply {
+            items = listOf(
+                JellyfinItemDto(id = "jf-movie-1", providerIds = mapOf("Tmdb" to "438631"), userData = JellyfinUserDataDto(played = false)),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedMovies(mediaRepository.observeMedia().first())
+
+        assertEquals(WatchStatus.VU, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
+    fun `pushWatchedHistory marque vus sur Jellyfin les films et episodes deja vus localement`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val movieId = (mediaRepository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.VU, tmdbId = 438631),
+        ) as Resource.Success).data
+        val seriesId = (mediaRepository.addMedia(
+            Media(title = "Arcane", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 94605, jellyfinId = "jf-series-1"),
+        ) as Resource.Success).data
+        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        episodeRepository.setEpisodeWatched(seriesId, EpisodeKey(1, 1), watched = true)
+
+        val api = FakeJellyfinApi().apply {
+            items = listOf(
+                JellyfinItemDto(id = "jf-movie-1", providerIds = mapOf("Tmdb" to "438631"), userData = JellyfinUserDataDto(played = false)),
+            )
+            episodesBySeriesId = mapOf(
+                "jf-series-1" to listOf(
+                    JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 1, episodeNumber = 1, userData = JellyfinUserDataDto(played = false)),
+                    JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 1, episodeNumber = 2, userData = JellyfinUserDataDto(played = false)),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        val result = repository.pushWatchedHistory(mediaRepository.observeMedia().first())
+
+        assertEquals(1, result.moviesMarkedPlayed)
+        assertEquals(1, result.episodesMarkedPlayed)
+        assertTrue(api.playedUrls.any { it.contains("jf-movie-1") })
+        assertTrue(api.playedUrls.any { it.contains("jf-ep-1") })
+        assertTrue(api.playedUrls.none { it.contains("jf-ep-2") })
+        assertNotNull(movieId)
+    }
+
+    @Test
+    fun `pushWatchedHistory ne marque rien de deja vu cote Jellyfin`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        mediaRepository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.VU, tmdbId = 438631))
+        val api = FakeJellyfinApi().apply {
+            items = listOf(
+                JellyfinItemDto(id = "jf-movie-1", providerIds = mapOf("Tmdb" to "438631"), userData = JellyfinUserDataDto(played = true)),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        val result = repository.pushWatchedHistory(mediaRepository.observeMedia().first())
+
+        assertEquals(0, result.moviesMarkedPlayed)
+        assertTrue(api.playedUrls.isEmpty())
+    }
+
+    @Test
+    fun `pushWatchedHistory ne fait rien sans session active`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        mediaRepository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.VU, tmdbId = 438631))
+        val api = FakeJellyfinApi().apply {
+            items = listOf(JellyfinItemDto(id = "jf-movie-1", providerIds = mapOf("Tmdb" to "438631"), userData = JellyfinUserDataDto(played = false)))
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(initial = null), mediaRepository)
+
+        val result = repository.pushWatchedHistory(mediaRepository.observeMedia().first())
+
+        assertEquals(0, result.moviesMarkedPlayed)
+        assertEquals(0, result.episodesMarkedPlayed)
+        assertTrue(api.playedUrls.isEmpty())
+    }
 }

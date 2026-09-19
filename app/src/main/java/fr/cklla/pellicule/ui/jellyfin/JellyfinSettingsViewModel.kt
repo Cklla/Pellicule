@@ -5,11 +5,13 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
+import fr.cklla.pellicule.domain.repository.MediaRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -21,6 +23,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class JellyfinSettingsViewModel @Inject constructor(
     private val jellyfinRepository: JellyfinRepository,
+    private val mediaRepository: MediaRepository,
 ) : ViewModel() {
 
     private val formState = MutableStateFlow(JellyfinSettingsUiState())
@@ -62,6 +65,16 @@ class JellyfinSettingsViewModel @Inject constructor(
     fun onDisconnectClicked() {
         jellyfinRepository.disconnect()
         formState.value = JellyfinSettingsUiState()
+    }
+
+    fun onPushHistoryClicked() {
+        if (formState.value.isPushingHistory) return
+        updateForm { it.copy(isPushingHistory = true, pushHistoryResult = null) }
+        viewModelScope.launch {
+            val items = mediaRepository.observeMedia().first()
+            val result = jellyfinRepository.pushWatchedHistory(items)
+            updateForm { it.copy(isPushingHistory = false, pushHistoryResult = result) }
+        }
     }
 
     private inline fun updateForm(transform: (JellyfinSettingsUiState) -> JellyfinSettingsUiState) {

@@ -4,6 +4,7 @@ import fr.cklla.pellicule.data.local.JellyfinSessionStore
 import fr.cklla.pellicule.data.remote.jellyfin.JellyfinApi
 import fr.cklla.pellicule.data.remote.jellyfin.dto.JellyfinAuthRequestDto
 import fr.cklla.pellicule.domain.model.EpisodeKey
+import fr.cklla.pellicule.domain.model.JellyfinPushHistoryResult
 import fr.cklla.pellicule.domain.model.JellyfinSession
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
@@ -14,6 +15,7 @@ import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import retrofit2.HttpException
 
 /**
@@ -80,7 +82,7 @@ class JellyfinRepositoryImpl @Inject constructor(
             authHeader = authHeader(current.accessToken),
             userId = current.userId,
         ).items
-        val watched = episodes
+        val watchedFromJellyfin = episodes
             .filter { it.userData?.played == true }
             .mapNotNull { ep ->
                 val season = ep.seasonNumber ?: return@mapNotNull null
@@ -88,16 +90,24 @@ class JellyfinRepositoryImpl @Inject constructor(
                 EpisodeKey(season, episodeNumber)
             }
             .toSet()
+        // Fusion, jamais remplacement pur : un épisode déjà marqué vu localement ne doit jamais
+        // être "dévu" par le pull, y compris quand Jellyfin répond "non vu" pour un item qu'il
+        // retrouve bien (serveur réinstallé, historique de lecture reparti de zéro) — Jellyfin fait
+        // foi pour ajouter du vu, jamais pour en retirer.
+        val watched = episodeRepository.observeWatchedEpisodes(media.id).first() + watchedFromJellyfin
         episodeRepository.replaceWatchedEpisodes(media.id, watched)
 
         // Liste vide = pas d'info exploitable (série non trouvée côté Jellyfin, ou réponse
         // incomplète) : on laisse le statut local tel quel plutôt que de le remettre à "à voir".
         if (episodes.isEmpty()) return
-        val newStatus = when {
+        val statusFromJellyfin = when {
             watched.size >= episodes.size -> WatchStatus.VU
             watched.isNotEmpty() -> WatchStatus.EN_COURS
             else -> WatchStatus.A_VOIR
         }
+        // Même principe que pour les épisodes ci-dessus : le pull ne fait jamais régresser un
+        // statut déjà plus avancé, il ne peut que le faire progresser.
+        val newStatus = maxOf(resolvedMedia.status, statusFromJellyfin)
         if (newStatus != resolvedMedia.status) {
             mediaRepository.updateMedia(resolvedMedia.copy(status = newStatus))
         }
@@ -120,11 +130,15 @@ class JellyfinRepositoryImpl @Inject constructor(
 
             movies.forEach { media ->
                 val item = itemByTmdbId[media.tmdbId] ?: return@forEach
-                val newStatus = when {
+                val statusFromJellyfin = when {
                     item.userData?.played == true -> WatchStatus.VU
                     (item.userData?.playbackPositionTicks ?: 0L) > 0L -> WatchStatus.EN_COURS
                     else -> WatchStatus.A_VOIR
                 }
+                // Ne jamais régresser un statut déjà plus avancé (même raison que pour les séries,
+                // voir `syncSeries`) : un film redevenu "non vu" côté Jellyfin (historique perdu)
+                // ne doit pas repasser "à voir" dans Pellicule.
+                val newStatus = maxOf(media.status, statusFromJellyfin)
                 if (item.id != media.jellyfinId || newStatus != media.status) {
                     mediaRepository.updateMedia(media.copy(jellyfinId = item.id, status = newStatus))
                 }
@@ -149,6 +163,57 @@ class JellyfinRepositoryImpl @Inject constructor(
                 jellyfinApi.markUnplayed(url, authHeader(current.accessToken))
             }
         }.onFailure(::disconnectIfUnauthorized)
+    }
+
+    override suspend fun pushWatchedHistory(items: List<Media>): JellyfinPushHistoryResult {
+        val current = session.value ?: return JellyfinPushHistoryResult(0, 0)
+        var moviesMarkedPlayed = 0
+        var episodesMarkedPlayed = 0
+
+        val movies = items.filter { it.type == MediaType.FILM && it.tmdbId != null && it.status == WatchStatus.VU }
+        if (movies.isNotEmpty()) {
+            runCatching {
+                val jellyfinItems = jellyfinApi.getItems(
+                    url = JellyfinApi.itemsUrl(current.serverUrl, current.userId),
+                    authHeader = authHeader(current.accessToken),
+                    includeItemTypes = "Movie",
+                    fields = "ProviderIds,UserData",
+                ).items
+                val itemByTmdbId = jellyfinItems
+                    .mapNotNull { item -> item.providerIds?.get("Tmdb")?.toLongOrNull()?.let { it to item } }
+                    .toMap()
+                movies.forEach movieLoop@{ media ->
+                    val item = itemByTmdbId[media.tmdbId] ?: return@movieLoop
+                    if (item.userData?.played == true) return@movieLoop
+                    jellyfinApi.markPlayed(JellyfinApi.playedItemUrl(current.serverUrl, current.userId, item.id), authHeader(current.accessToken))
+                    moviesMarkedPlayed++
+                }
+            }.onFailure(::disconnectIfUnauthorized)
+        }
+
+        items.filter { it.type == MediaType.SERIE || it.type == MediaType.ANIME }
+            .forEach seriesLoop@{ media ->
+                runCatching {
+                    val jellyfinId = resolveJellyfinId(current, media) ?: return@seriesLoop
+                    val locallyWatched = episodeRepository.observeWatchedEpisodes(media.id).first()
+                    if (locallyWatched.isEmpty()) return@seriesLoop
+                    val jellyfinEpisodes = jellyfinApi.getSeriesEpisodes(
+                        url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
+                        authHeader = authHeader(current.accessToken),
+                        userId = current.userId,
+                    ).items
+                    jellyfinEpisodes.forEach episodeLoop@{ ep ->
+                        val season = ep.seasonNumber ?: return@episodeLoop
+                        val episodeNumber = ep.episodeNumber ?: return@episodeLoop
+                        if (EpisodeKey(season, episodeNumber) !in locallyWatched) return@episodeLoop
+                        if (ep.userData?.played == true) return@episodeLoop
+                        jellyfinApi.markPlayed(JellyfinApi.playedItemUrl(current.serverUrl, current.userId, ep.id), authHeader(current.accessToken))
+                        episodesMarkedPlayed++
+                    }
+                }.onFailure(::disconnectIfUnauthorized)
+            }
+
+        return JellyfinPushHistoryResult(moviesMarkedPlayed, episodesMarkedPlayed)
     }
 
     /**

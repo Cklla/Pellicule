@@ -92,4 +92,10 @@
     <string name="jellyfin_connect_action">Se connecter</string>
     <string name="jellyfin_connected_label">Connecté</string>
     <string name="jellyfin_disconnect_action">Se déconnecter</string>
+    <string name="jellyfin_push_history_action">Renvoyer l\'historique de visionnage vers Jellyfin</string>
+    <string name="jellyfin_push_history_confirm_title">Réinjecter l\'historique vers Jellyfin ?</string>
+    <string name="jellyfin_push_history_confirm_message">Marque comme vus sur ce serveur tous les films et épisodes déjà vus dans Pellicule. Utile après une réinstallation de Jellyfin ayant effacé son historique de lecture. Rien n\'est jamais démarqué côté Jellyfin.</string>
+    <string name="jellyfin_push_history_confirm_confirm">Renvoyer</string>
+    <string name="jellyfin_push_history_confirm_cancel">Annuler</string>
+    <string name="jellyfin_push_history_result">%1$d film(s) et %2$d épisode(s) marqués vus sur Jellyfin.</string>
 </resources>

@@ -19,11 +19,16 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.cklla.pellicule.R
+import fr.cklla.pellicule.domain.model.JellyfinPushHistoryResult
 import fr.cklla.pellicule.ui.theme.AccentPurple
 import fr.cklla.pellicule.ui.theme.AccentPurpleLight
 import fr.cklla.pellicule.ui.theme.AccentPurpleMuted
@@ -64,6 +70,7 @@ fun JellyfinSettingsScreen(onBackClick: () -> Unit, viewModel: JellyfinSettingsV
         onPasswordChanged = viewModel::onPasswordChanged,
         onConnectClick = viewModel::onConnectClicked,
         onDisconnectClick = viewModel::onDisconnectClicked,
+        onPushHistoryClick = viewModel::onPushHistoryClicked,
     )
 }
 
@@ -76,6 +83,7 @@ private fun JellyfinSettingsContent(
     onPasswordChanged: (String) -> Unit,
     onConnectClick: () -> Unit,
     onDisconnectClick: () -> Unit,
+    onPushHistoryClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().background(BackgroundDark)) {
@@ -92,7 +100,10 @@ private fun JellyfinSettingsContent(
                 ConnectedStatus(
                     username = uiState.connectedUsername,
                     serverUrl = uiState.connectedServerUrl.orEmpty(),
+                    isPushingHistory = uiState.isPushingHistory,
+                    pushHistoryResult = uiState.pushHistoryResult,
                     onDisconnectClick = onDisconnectClick,
+                    onPushHistoryClick = onPushHistoryClick,
                 )
             } else {
                 ConnectForm(
@@ -124,7 +135,16 @@ private fun BackHeader(onBackClick: () -> Unit) {
 }
 
 @Composable
-private fun ConnectedStatus(username: String, serverUrl: String, onDisconnectClick: () -> Unit) {
+private fun ConnectedStatus(
+    username: String,
+    serverUrl: String,
+    isPushingHistory: Boolean,
+    pushHistoryResult: JellyfinPushHistoryResult?,
+    onDisconnectClick: () -> Unit,
+    onPushHistoryClick: () -> Unit,
+) {
+    var showPushHistoryConfirm by remember { mutableStateOf(false) }
+
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(
             modifier = Modifier
@@ -143,6 +163,32 @@ private fun ConnectedStatus(username: String, serverUrl: String, onDisconnectCli
             Text(text = username, style = PelliculeTextStyles.cardTitle, color = TextPrimary)
             Text(text = serverUrl, style = PelliculeTextStyles.cardSubtitle, color = TextMuted)
         }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable(enabled = !isPushingHistory, onClick = { showPushHistoryConfirm = true }),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (isPushingHistory) {
+                    CircularProgressIndicator(color = AccentPurpleLight, modifier = Modifier.height(20.dp))
+                } else {
+                    Text(
+                        text = stringResource(R.string.jellyfin_push_history_action),
+                        style = PelliculeTextStyles.linkLabel.copy(textDecoration = TextDecoration.Underline),
+                        color = AccentPurpleLight,
+                    )
+                }
+            }
+            pushHistoryResult?.let { result ->
+                Text(
+                    text = stringResource(R.string.jellyfin_push_history_result, result.moviesMarkedPlayed, result.episodesMarkedPlayed),
+                    style = PelliculeTextStyles.emptyMessage,
+                    color = TextTertiary,
+                )
+            }
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -157,6 +203,38 @@ private fun ConnectedStatus(username: String, serverUrl: String, onDisconnectCli
             )
         }
     }
+
+    if (showPushHistoryConfirm) {
+        PushHistoryConfirmDialog(
+            onConfirm = {
+                showPushHistoryConfirm = false
+                onPushHistoryClick()
+            },
+            onDismiss = { showPushHistoryConfirm = false },
+        )
+    }
+}
+
+@Composable
+private fun PushHistoryConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceCard,
+        titleContentColor = TextPrimary,
+        textContentColor = TextTertiary,
+        title = { Text(stringResource(R.string.jellyfin_push_history_confirm_title)) },
+        text = { Text(stringResource(R.string.jellyfin_push_history_confirm_message)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = stringResource(R.string.jellyfin_push_history_confirm_confirm), color = AccentPurpleLight)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.jellyfin_push_history_confirm_cancel), color = TextTertiary)
+            }
+        },
+    )
 }
 
 @Composable
@@ -272,6 +350,7 @@ private fun JellyfinSettingsDisconnectedPreview() {
             onPasswordChanged = {},
             onConnectClick = {},
             onDisconnectClick = {},
+            onPushHistoryClick = {},
         )
     }
 }
@@ -288,6 +367,7 @@ private fun JellyfinSettingsConnectedPreview() {
             onPasswordChanged = {},
             onConnectClick = {},
             onDisconnectClick = {},
+            onPushHistoryClick = {},
         )
     }
 }

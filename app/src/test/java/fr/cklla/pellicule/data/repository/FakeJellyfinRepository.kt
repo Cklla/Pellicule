@@ -1,6 +1,7 @@
 package fr.cklla.pellicule.data.repository
 
 import fr.cklla.pellicule.domain.model.EpisodeKey
+import fr.cklla.pellicule.domain.model.JellyfinPushHistoryResult
 import fr.cklla.pellicule.domain.model.JellyfinSession
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.Resource
@@ -19,6 +20,8 @@ class FakeJellyfinRepository : JellyfinRepository {
     val syncedItems = mutableListOf<List<Media>>()
     val syncedMovies = mutableListOf<List<Media>>()
     val pushedEpisodes = mutableListOf<Triple<Media, EpisodeKey, Boolean>>()
+    var pushWatchedHistoryResult = JellyfinPushHistoryResult(moviesMarkedPlayed = 0, episodesMarkedPlayed = 0)
+    val pushedHistoryItems = mutableListOf<List<Media>>()
 
     fun setSession(session: JellyfinSession?) {
         _session.value = session
@@ -46,5 +49,11 @@ class FakeJellyfinRepository : JellyfinRepository {
     override suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean) {
         if (_session.value == null) return
         pushedEpisodes.add(Triple(media, EpisodeKey(seasonNumber, episodeNumber), watched))
+    }
+
+    override suspend fun pushWatchedHistory(items: List<Media>): JellyfinPushHistoryResult {
+        if (_session.value == null) return JellyfinPushHistoryResult(0, 0)
+        pushedHistoryItems.add(items)
+        return pushWatchedHistoryResult
     }
 }

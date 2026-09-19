@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.domain.repository
 
+import fr.cklla.pellicule.domain.model.JellyfinPushHistoryResult
 import fr.cklla.pellicule.domain.model.JellyfinSession
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.Resource
@@ -12,7 +13,10 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * Le statut `WatchStatus` (à voir/en cours/vu) est dérivé de ce que renvoie Jellyfin, qui fait
  * foi côté lecture — voir [syncTrackedSeries] (épisodes) et [syncTrackedMovies] (statut de
- * lecture direct de l'item).
+ * lecture direct de l'item). **Jellyfin ne fait foi que pour progresser** : le pull ne fait
+ * jamais régresser un statut ou dévoir un épisode déjà connu localement (protection contre un
+ * historique de lecture perdu côté serveur, ex. réinstallation Jellyfin) — voir [pushWatchedHistory]
+ * pour reconstituer l'historique serveur dans ce cas.
  */
 interface JellyfinRepository {
 
@@ -48,4 +52,14 @@ interface JellyfinRepository {
      * prochain [syncTrackedSeries] rattrapera l'écart).
      */
     suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean)
+
+    /**
+     * Réinjecte vers Jellyfin l'historique de vus déjà connu en local (films en statut `VU`,
+     * épisodes marqués vus) — prévu pour reconstituer le statut de lecture d'un serveur Jellyfin
+     * réinstallé/vidé, où Pellicule devient alors la source de vérité le temps de cette action
+     * explicite. Ne marque que ce qui n'est pas déjà "vu" côté serveur (best-effort, idempotent) ;
+     * ne démarque jamais rien côté Jellyfin. Ne fait rien sans session active ; les erreurs par
+     * contenu sont ignorées pour ne pas bloquer les autres.
+     */
+    suspend fun pushWatchedHistory(items: List<Media>): JellyfinPushHistoryResult
 }
