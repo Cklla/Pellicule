@@ -4,6 +4,7 @@ import fr.cklla.pellicule.data.remote.dto.TmdbMovieDetailsDto
 import fr.cklla.pellicule.data.remote.dto.TmdbSearchResponseDto
 import fr.cklla.pellicule.data.remote.dto.TmdbSeasonDto
 import fr.cklla.pellicule.data.remote.dto.TmdbTvDetailsDto
+import fr.cklla.pellicule.data.remote.dto.TmdbWatchProvidersResponseDto
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -50,6 +51,24 @@ interface TmdbApi {
         @Query("language") language: String = "fr-FR",
     ): TmdbSeasonDto
 
+    /**
+     * Plateformes proposant un film, par pays. Pas de paramètre `language` : la réponse ne
+     * contient que des noms de plateformes et des chemins de logos, identiques quelle que soit la
+     * langue demandée.
+     */
+    @GET("movie/{movie_id}/watch/providers")
+    suspend fun getMovieWatchProviders(
+        @Path("movie_id") movieId: Long,
+        @Query("api_key") apiKey: String,
+    ): TmdbWatchProvidersResponseDto
+
+    /** Plateformes proposant une série/anime, par pays. */
+    @GET("tv/{tv_id}/watch/providers")
+    suspend fun getTvWatchProviders(
+        @Path("tv_id") tvId: Long,
+        @Query("api_key") apiKey: String,
+    ): TmdbWatchProvidersResponseDto
+
     companion object {
         const val BASE_URL = "https://api.themoviedb.org/3/"
 
@@ -58,5 +77,8 @@ interface TmdbApi {
 
         /** Taille d'image adaptée aux vignettes d'épisode (plus petites qu'une affiche). */
         const val STILL_BASE_URL = "https://image.tmdb.org/t/p/w300"
+
+        /** Taille adaptée aux logos carrés de plateformes de streaming. */
+        const val PROVIDER_LOGO_BASE_URL = "https://image.tmdb.org/t/p/w92"
     }
 }

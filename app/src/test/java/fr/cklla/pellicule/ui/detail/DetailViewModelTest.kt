@@ -13,6 +13,8 @@ import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.Season
+import fr.cklla.pellicule.domain.model.WatchAvailability
+import fr.cklla.pellicule.domain.model.WatchProvider
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
@@ -56,6 +58,7 @@ class DetailViewModelTest {
         episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
+        watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf(PelliculeDestinations.DETAIL_ARG_MEDIA_ID to mediaId)),
         mediaRepository = mediaRepository,
@@ -63,6 +66,7 @@ class DetailViewModelTest {
         episodeRepository = episodeRepository,
         jellyfinRepository = jellyfinRepository,
         synopsisRepository = synopsisRepository,
+        watchProvidersRepository = watchProvidersRepository,
     )
 
     private fun previewViewModelFor(
@@ -76,6 +80,7 @@ class DetailViewModelTest {
         episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
+        watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(
             mapOf(
@@ -91,6 +96,7 @@ class DetailViewModelTest {
         episodeRepository = episodeRepository,
         jellyfinRepository = jellyfinRepository,
         synopsisRepository = synopsisRepository,
+        watchProvidersRepository = watchProvidersRepository,
     )
 
     @Test
@@ -151,6 +157,59 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals("Un employé découpe son esprit...", viewModel.uiState.value.synopsis)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `ouvrir une fiche suivie charge ses plateformes de streaming`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val addResult = repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 1))
+        val mediaId = (addResult as Resource.Success).data
+        val netflix = WatchAvailability.Known(
+            streaming = listOf(WatchProvider(id = 8, name = "Netflix", logoUrl = null)),
+            rentOrBuy = emptyList(),
+            link = null,
+        )
+        val watchProvidersRepository = FakeWatchProvidersRepository().apply { response = Resource.Success(netflix) }
+
+        val viewModel = viewModelFor(mediaId, repository, watchProvidersRepository = watchProvidersRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(netflix, viewModel.uiState.value.watchAvailability)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `ouvrir un apercu charge aussi ses plateformes de streaming`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val availability = WatchAvailability.Known(
+            streaming = listOf(WatchProvider(id = 350, name = "Apple TV+", logoUrl = null)),
+            rentOrBuy = emptyList(),
+            link = null,
+        )
+        val watchProvidersRepository = FakeWatchProvidersRepository().apply { response = Resource.Success(availability) }
+
+        val viewModel = previewViewModelFor(repository, tmdbId = 42, watchProvidersRepository = watchProvidersRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(availability, viewModel.uiState.value.watchAvailability)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `un echec de chargement des plateformes vaut disponibilite inconnue`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val addResult = repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 1))
+        val mediaId = (addResult as Resource.Success).data
+        val watchProvidersRepository = FakeWatchProvidersRepository().apply { response = Resource.Error("Réseau indisponible") }
+
+        val viewModel = viewModelFor(mediaId, repository, watchProvidersRepository = watchProvidersRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(WatchAvailability.Unknown, viewModel.uiState.value.watchAvailability)
         collectorJob.cancel()
     }
 
@@ -286,6 +345,7 @@ class DetailViewModelTest {
             episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
             jellyfinRepository = FakeJellyfinRepository(),
             synopsisRepository = FakeSynopsisRepository(),
+            watchProvidersRepository = FakeWatchProvidersRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()

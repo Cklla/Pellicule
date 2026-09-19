@@ -2,12 +2,15 @@ package fr.cklla.pellicule.ui.detail
 
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.Season
+import fr.cklla.pellicule.domain.model.WatchAvailability
 
 data class DetailUiState(
     val isLoading: Boolean = true,
     val media: Media? = null,
     /** Synopsis TMDB, récupéré à l'ouverture de la fiche ; `null` tant qu'il n'est pas encore chargé. */
     val synopsis: String? = null,
+    /** Plateformes de streaming françaises ; `null` tant que la réponse TMDB n'est pas arrivée. */
+    val watchAvailability: WatchAvailability? = null,
     /** Saisons disponibles pour une série/anime ; toujours vide pour un FILM. */
     val seasons: List<Season> = emptyList(),
     val selectedSeasonNumber: Int? = null,

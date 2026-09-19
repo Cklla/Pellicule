@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +60,8 @@ import fr.cklla.pellicule.R
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Season
+import fr.cklla.pellicule.domain.model.WatchAvailability
+import fr.cklla.pellicule.domain.model.WatchProvider
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.ui.components.MediaCoverPlaceholder
 import fr.cklla.pellicule.ui.labelRes
@@ -99,6 +102,7 @@ fun DetailScreen(
         media = media,
         isInBacklog = uiState.isInBacklog,
         synopsis = uiState.synopsis,
+        watchAvailability = uiState.watchAvailability,
         seasons = uiState.seasons,
         selectedSeasonNumber = uiState.selectedSeasonNumber,
         episodes = uiState.episodes,
@@ -120,6 +124,7 @@ private fun DetailContent(
     media: Media,
     isInBacklog: Boolean,
     synopsis: String?,
+    watchAvailability: WatchAvailability?,
     seasons: List<Season>,
     selectedSeasonNumber: Int?,
     episodes: List<EpisodeUiModel>,
@@ -167,6 +172,11 @@ private fun DetailContent(
             // tant que le synopsis n'est pas encore arrivé de TMDB plutôt que d'afficher un vide.
             if (!synopsis.isNullOrBlank()) {
                 SynopsisSection(synopsis = synopsis)
+            }
+            // Masquée tant que la réponse TMDB n'est pas arrivée, pour ne pas annoncer une
+            // disponibilité inconnue le temps de l'appel réseau.
+            watchAvailability?.let { availability ->
+                AvailabilitySection(availability = availability, type = media.type)
             }
             // Statut, retrait et épisodes n'ont de sens que pour un contenu réellement suivi :
             // masqués tant que la fiche n'est qu'un aperçu ouvert depuis la Recherche (voir
@@ -278,6 +288,99 @@ private fun SynopsisSection(synopsis: String) {
             textAlign = TextAlign.Justify,
         )
     }
+}
+
+/**
+ * Disponibilité en France, d'après les données JustWatch servies par TMDB (le crédit à JustWatch
+ * est une condition d'utilisation de ces données). La ligne location/achat ne concerne que les
+ * films : pour une série, l'intérêt est de savoir où la regarder, pas où acheter ses épisodes.
+ */
+@Composable
+private fun AvailabilitySection(availability: WatchAvailability, type: MediaType) {
+    val known = availability as? WatchAvailability.Known
+    Column {
+        SectionLabel(stringResource(R.string.detail_availability_label))
+        Spacer(modifier = Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            AvailabilityLine(
+                label = stringResource(R.string.detail_availability_streaming),
+                providers = known?.streaming.orEmpty(),
+                isKnown = known != null,
+            )
+            if (type == MediaType.FILM) {
+                AvailabilityLine(
+                    label = stringResource(R.string.detail_availability_rent_buy),
+                    providers = known?.rentOrBuy.orEmpty(),
+                    isKnown = known != null,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        JustWatchCredit(link = known?.link)
+    }
+}
+
+@Composable
+private fun AvailabilityLine(label: String, providers: List<WatchProvider>, isKnown: Boolean) {
+    Column {
+        Text(text = label, style = PelliculeTextStyles.detailSubtitle, color = TextTertiary)
+        Spacer(modifier = Modifier.height(8.dp))
+        if (providers.isEmpty()) {
+            Text(
+                // Aucune offre connue en France et donnée fiable : c'est une absence, pas une
+                // ignorance — les deux cas ne se disent pas de la même façon.
+                text = stringResource(
+                    if (isKnown) R.string.detail_availability_none else R.string.detail_availability_unknown,
+                ),
+                style = PelliculeTextStyles.detailSubtitle,
+                color = TextMuted,
+            )
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                providers.forEach { provider -> ProviderChip(provider = provider) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProviderChip(provider: WatchProvider) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(SurfaceCard)
+            .border(BorderStroke(0.5.dp, BorderHairline.copy(alpha = 0.4f)), RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (provider.logoUrl != null) {
+            AsyncImage(
+                model = provider.logoUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(5.dp)),
+            )
+        }
+        Text(text = provider.name, style = PelliculeTextStyles.cardSubtitle, color = TextPrimary)
+    }
+}
+
+@Composable
+private fun JustWatchCredit(link: String?) {
+    val uriHandler = LocalUriHandler.current
+    val style = PelliculeTextStyles.linkLabel
+    Text(
+        text = stringResource(R.string.detail_availability_justwatch),
+        style = if (link != null) style.copy(textDecoration = TextDecoration.Underline) else style,
+        color = TextMuted,
+        modifier = if (link != null) Modifier.clickable { uriHandler.openUri(link) } else Modifier,
+    )
 }
 
 @Composable
@@ -582,6 +685,11 @@ private fun DetailContentPreview() {
             media = media,
             isInBacklog = true,
             synopsis = "Une danseuse d'un groupe de pop japonais se lance dans une carrière d'actrice…",
+            watchAvailability = WatchAvailability.Known(
+                streaming = listOf(WatchProvider(id = 8, name = "Netflix", logoUrl = null)),
+                rentOrBuy = emptyList(),
+                link = "https://www.themoviedb.org/movie/10494/watch?locale=FR",
+            ),
             seasons = listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 2, posterUrl = null)),
             selectedSeasonNumber = 1,
             episodes = episodes,
@@ -607,6 +715,7 @@ private fun DetailContentApercuPreview() {
             media = media,
             isInBacklog = false,
             synopsis = null,
+            watchAvailability = WatchAvailability.Unknown,
             seasons = emptyList(),
             selectedSeasonNumber = null,
             episodes = emptyList(),

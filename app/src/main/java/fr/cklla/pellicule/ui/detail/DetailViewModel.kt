@@ -11,6 +11,7 @@ import fr.cklla.pellicule.domain.model.MediaSearchResult
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.Season
+import fr.cklla.pellicule.domain.model.WatchAvailability
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.model.toMedia
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
@@ -18,6 +19,7 @@ import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.repository.SynopsisRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
+import fr.cklla.pellicule.domain.repository.WatchProvidersRepository
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,6 +62,7 @@ class DetailViewModel @Inject constructor(
     private val episodeRepository: EpisodeRepository,
     private val jellyfinRepository: JellyfinRepository,
     private val synopsisRepository: SynopsisRepository,
+    private val watchProvidersRepository: WatchProvidersRepository,
 ) : ViewModel() {
 
     private val mediaId: String? = savedStateHandle[PelliculeDestinations.DETAIL_ARG_MEDIA_ID]
@@ -68,6 +71,7 @@ class DetailViewModel @Inject constructor(
     private val workingMedia = MutableStateFlow(previewResult?.toMedia())
     private val isLoading = MutableStateFlow(mediaId != null)
     private val synopsis = MutableStateFlow<String?>(null)
+    private val watchAvailability = MutableStateFlow<WatchAvailability?>(null)
 
     private val seasons = MutableStateFlow<List<Season>>(emptyList())
     private val selectedSeasonNumber = MutableStateFlow<Int?>(null)
@@ -82,10 +86,16 @@ class DetailViewModel @Inject constructor(
                 workingMedia.value = media
                 isLoading.value = false
                 loadSeasonsIfApplicable()
-                media?.let(::fetchSynopsis)
+                media?.let {
+                    fetchSynopsis(it)
+                    fetchWatchAvailability(it)
+                }
             }
         } else {
-            workingMedia.value?.let(::fetchSynopsis)
+            workingMedia.value?.let {
+                fetchSynopsis(it)
+                fetchWatchAvailability(it)
+            }
         }
 
         viewModelScope.launch {
@@ -127,6 +137,19 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Plateformes françaises, jamais mises en cache : les offres changent trop souvent. Un appel
+     * en échec vaut disponibilité inconnue — c'est bien ce qu'on sait à cet instant, et l'afficher
+     * ainsi vaut mieux qu'annoncer à tort une absence d'offre.
+     */
+    private fun fetchWatchAvailability(media: Media) {
+        val tmdbId = media.tmdbId ?: return
+        viewModelScope.launch {
+            val result = watchProvidersRepository.getAvailability(tmdbId, media.type)
+            watchAvailability.value = (result as? Resource.Success)?.data ?: WatchAvailability.Unknown
+        }
+    }
+
     private data class EpisodesSectionState(
         val episodes: List<EpisodeUiModel> = emptyList(),
         val isLoading: Boolean = false,
@@ -158,9 +181,15 @@ class DetailViewModel @Inject constructor(
         )
     }
 
-    // `combine` n'a pas d'overload à 6 flux typés : `workingMedia` et `synopsis` sont regroupés en
-    // amont pour rester dans la limite des 5 arguments du `combine` final.
-    private val mediaSection = combine(workingMedia, synopsis) { media, syn -> media to syn }
+    private data class MediaSectionState(
+        val media: Media? = null,
+        val synopsis: String? = null,
+        val watchAvailability: WatchAvailability? = null,
+    )
+
+    // `combine` n'a pas d'overload à 7 flux typés : tout ce qui décrit le contenu lui-même est
+    // regroupé en amont pour rester dans la limite des 5 arguments du `combine` final.
+    private val mediaSection = combine(workingMedia, synopsis, watchAvailability, ::MediaSectionState)
 
     val uiState: StateFlow<DetailUiState> = combine(
         isLoading,
@@ -168,11 +197,12 @@ class DetailViewModel @Inject constructor(
         seasons,
         selectedSeasonNumber,
         episodesSection,
-    ) { loading, (media, syn), seasonList, selectedSeason, episodesState ->
+    ) { loading, mediaState, seasonList, selectedSeason, episodesState ->
         DetailUiState(
             isLoading = loading,
-            media = media,
-            synopsis = syn,
+            media = mediaState.media,
+            synopsis = mediaState.synopsis,
+            watchAvailability = mediaState.watchAvailability,
             seasons = seasonList,
             selectedSeasonNumber = selectedSeason,
             episodes = episodesState.episodes,
