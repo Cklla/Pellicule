@@ -38,6 +38,10 @@
     <string name="detail_back">Retour à la bibliothèque</string>
     <string name="detail_synopsis_label">Synopsis</string>
     <string name="detail_status_label">Statut</string>
+    <string name="detail_status_reset_confirm_title">Repasser ce contenu à un autre statut ?</string>
+    <string name="detail_status_reset_confirm_message">La progression détaillée (épisodes vus, ou lecture du film) sera effacée, y compris sur Jellyfin et les autres appareils connectés.</string>
+    <string name="detail_status_reset_confirm_confirm">Continuer</string>
+    <string name="detail_status_reset_confirm_cancel">Annuler</string>
     <string name="detail_rating_label">Note perso</string>
     <string name="detail_rating_star_content_description">Donner une note de %1$d sur 5</string>
     <string name="detail_add_action">Ajouter au suivi</string>

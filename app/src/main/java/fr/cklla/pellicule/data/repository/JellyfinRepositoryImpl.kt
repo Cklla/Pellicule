@@ -165,6 +165,29 @@ class JellyfinRepositoryImpl @Inject constructor(
         }.onFailure(::disconnectIfUnauthorized)
     }
 
+    override suspend fun pushMovieWatched(media: Media, watched: Boolean) {
+        val current = session.value ?: return
+        runCatching {
+            // Pas `resolveJellyfinId` : son `getItems` filtre par défaut sur `IncludeItemTypes=Series`
+            // (pensé pour les séries), un film n'y apparaîtrait donc jamais. Même filtre explicite que
+            // `syncTrackedMovies`.
+            val jellyfinId = media.jellyfinId ?: run {
+                val tmdbId = media.tmdbId ?: return
+                jellyfinApi.getItems(
+                    url = JellyfinApi.itemsUrl(current.serverUrl, current.userId),
+                    authHeader = authHeader(current.accessToken),
+                    includeItemTypes = "Movie",
+                ).items.firstOrNull { it.providerIds?.get("Tmdb") == tmdbId.toString() }?.id ?: return
+            }
+            val url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, jellyfinId)
+            if (watched) {
+                jellyfinApi.markPlayed(url, authHeader(current.accessToken))
+            } else {
+                jellyfinApi.markUnplayed(url, authHeader(current.accessToken))
+            }
+        }.onFailure(::disconnectIfUnauthorized)
+    }
+
     override suspend fun pushWatchedHistory(items: List<Media>): JellyfinPushHistoryResult {
         val current = session.value ?: return JellyfinPushHistoryResult(0, 0)
         var moviesMarkedPlayed = 0

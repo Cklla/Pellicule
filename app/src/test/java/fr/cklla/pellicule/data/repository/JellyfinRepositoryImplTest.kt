@@ -286,6 +286,43 @@ class JellyfinRepositoryImplTest {
     }
 
     @Test
+    fun `pushMovieWatched demarque le film sur Jellyfin en utilisant le jellyfinId deja connu`() = runTest {
+        val media = Media(id = "media-1", title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631, jellyfinId = "jf-movie-1")
+        val api = FakeJellyfinApi()
+        val repository = repository(api, FakeJellyfinSessionStore(session))
+
+        repository.pushMovieWatched(media, watched = false)
+
+        assertEquals(1, api.unplayedUrls.size)
+        assertTrue(api.unplayedUrls.first().contains("jf-movie-1"))
+        assertTrue(api.playedUrls.isEmpty())
+    }
+
+    @Test
+    fun `pushMovieWatched resout le jellyfinId par tmdbId quand il n'est pas encore connu`() = runTest {
+        val media = Media(id = "media-1", title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631)
+        val api = FakeJellyfinApi().apply {
+            items = listOf(JellyfinItemDto(id = "jf-movie-1", providerIds = mapOf("Tmdb" to "438631")))
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session))
+
+        repository.pushMovieWatched(media, watched = false)
+
+        assertTrue(api.unplayedUrls.first().contains("jf-movie-1"))
+    }
+
+    @Test
+    fun `pushMovieWatched ne fait rien sans session active`() = runTest {
+        val media = Media(id = "media-1", title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631, jellyfinId = "jf-movie-1")
+        val api = FakeJellyfinApi()
+        val repository = repository(api, FakeJellyfinSessionStore(initial = null))
+
+        repository.pushMovieWatched(media, watched = false)
+
+        assertTrue(api.unplayedUrls.isEmpty())
+    }
+
+    @Test
     fun `syncTrackedSeries efface la session locale sur un 401`() = runTest {
         val mediaRepository = fakeMediaRepository(FakeMediaDao())
         mediaRepository.addMedia(Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396))

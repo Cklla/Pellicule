@@ -185,7 +185,32 @@ class DetailViewModel @Inject constructor(
         initialValue = DetailUiState(isLoading = isLoading.value, media = workingMedia.value),
     )
 
-    fun onStatusSelected(status: WatchStatus) = applyEdit { it.copy(status = status) }
+    // Repasser un contenu "Vu" à un autre statut doit aussi démarquer ce qu'il efface côté
+    // Jellyfin (épisodes ou film) — sinon le prochain pull recalcule "Vu" depuis Jellyfin (qui
+    // n'a pas bougé) et réimpose immédiatement l'ancien statut, voir `JellyfinRepository`.
+    fun onStatusSelected(status: WatchStatus) {
+        val previousStatus = workingMedia.value?.status
+        applyEdit { it.copy(status = status) }
+        if (previousStatus == WatchStatus.VU && status != WatchStatus.VU) {
+            resetWatchedOnJellyfin()
+        }
+    }
+
+    private fun resetWatchedOnJellyfin() {
+        val media = workingMedia.value?.takeIf { it.id.isNotEmpty() } ?: return
+        viewModelScope.launch {
+            when (media.type) {
+                MediaType.FILM -> jellyfinRepository.pushMovieWatched(media, watched = false)
+                MediaType.SERIE, MediaType.ANIME -> {
+                    val watchedEpisodes = episodeRepository.observeWatchedEpisodes(media.id).first()
+                    watchedEpisodes.forEach { episode ->
+                        episodeRepository.setEpisodeWatched(media.id, episode, watched = false)
+                        jellyfinRepository.pushEpisodeWatched(media, episode.seasonNumber, episode.episodeNumber, watched = false)
+                    }
+                }
+            }
+        }
+    }
 
     // `rating = null` correspond à "aucune note" : cliquer sur l'étoile qui représente déjà la
     // note actuelle (voir `RatingSection`) doit pouvoir revenir à cet état, pas seulement en

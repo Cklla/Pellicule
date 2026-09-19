@@ -7,6 +7,7 @@ import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
 import fr.cklla.pellicule.data.repository.FakeMediaDao
 import fr.cklla.pellicule.data.repository.fakeMediaRepository
 import fr.cklla.pellicule.domain.model.EpisodeInfo
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.JellyfinSession
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
@@ -390,6 +391,80 @@ class DetailViewModelTest {
 
         assertTrue(jellyfinRepository.pushedEpisodes.isEmpty())
         assertTrue(viewModel.uiState.value.episodes.first().watched)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `repasser une serie de Vu a En cours devoit ses episodes localement et sur Jellyfin`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val addResult = repository.addMedia(
+            Media(title = "Kaamelott", type = MediaType.SERIE, status = WatchStatus.VU, tmdbId = 95396),
+        )
+        val mediaId = (addResult as Resource.Success).data
+        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 1), watched = true)
+        episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 2), watched = true)
+        val jellyfinRepository = FakeJellyfinRepository().apply {
+            setSession(JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token"))
+        }
+
+        val viewModel = viewModelFor(mediaId, repository, episodeRepository = episodeRepository, jellyfinRepository = jellyfinRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onStatusSelected(WatchStatus.EN_COURS)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(WatchStatus.EN_COURS, viewModel.uiState.value.media?.status)
+        assertTrue(episodeRepository.observeWatchedEpisodes(mediaId).first().isEmpty())
+        assertEquals(2, jellyfinRepository.pushedEpisodes.size)
+        assertTrue(jellyfinRepository.pushedEpisodes.all { !it.third })
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `repasser un film de Vu a A voir devoit sa lecture sur Jellyfin`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val addResult = repository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.VU, tmdbId = 438631),
+        )
+        val mediaId = (addResult as Resource.Success).data
+        val jellyfinRepository = FakeJellyfinRepository().apply {
+            setSession(JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token"))
+        }
+
+        val viewModel = viewModelFor(mediaId, repository, jellyfinRepository = jellyfinRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onStatusSelected(WatchStatus.A_VOIR)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(WatchStatus.A_VOIR, viewModel.uiState.value.media?.status)
+        assertEquals(1, jellyfinRepository.pushedMovies.size)
+        assertFalse(jellyfinRepository.pushedMovies.first().second)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `changer de statut sans passer par Vu ne touche pas Jellyfin`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val addResult = repository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631),
+        )
+        val mediaId = (addResult as Resource.Success).data
+        val jellyfinRepository = FakeJellyfinRepository().apply {
+            setSession(JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token"))
+        }
+
+        val viewModel = viewModelFor(mediaId, repository, jellyfinRepository = jellyfinRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onStatusSelected(WatchStatus.EN_COURS)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(jellyfinRepository.pushedMovies.isEmpty())
         collectorJob.cancel()
     }
 }
