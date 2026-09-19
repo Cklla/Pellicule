@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -270,7 +271,12 @@ private fun SynopsisSection(synopsis: String) {
     Column {
         SectionLabel(stringResource(R.string.detail_synopsis_label))
         Spacer(modifier = Modifier.height(10.dp))
-        Text(text = synopsis, style = PelliculeTextStyles.detailSubtitle, color = TextTertiary)
+        Text(
+            text = synopsis,
+            style = PelliculeTextStyles.detailSubtitle,
+            color = TextTertiary,
+            textAlign = TextAlign.Justify,
+        )
     }
 }
 
