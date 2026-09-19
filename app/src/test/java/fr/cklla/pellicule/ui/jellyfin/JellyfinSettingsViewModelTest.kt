@@ -1,7 +1,12 @@
 package fr.cklla.pellicule.ui.jellyfin
 
 import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
+import fr.cklla.pellicule.data.repository.FakeMediaDao
+import fr.cklla.pellicule.data.repository.fakeMediaRepository
+import fr.cklla.pellicule.domain.model.JellyfinPushHistoryResult
+import fr.cklla.pellicule.domain.model.JellyfinSession
 import fr.cklla.pellicule.domain.model.Resource
+import fr.cklla.pellicule.domain.repository.MediaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -32,10 +37,15 @@ class JellyfinSettingsViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private fun viewModel(
+        repository: FakeJellyfinRepository,
+        mediaRepository: MediaRepository = fakeMediaRepository(FakeMediaDao()),
+    ) = JellyfinSettingsViewModel(repository, mediaRepository)
+
     @Test
     fun `une connexion reussie vide le mot de passe et affiche le statut connecte`() = runTest {
         val repository = FakeJellyfinRepository()
-        val viewModel = JellyfinSettingsViewModel(repository)
+        val viewModel = viewModel(repository)
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -58,7 +68,7 @@ class JellyfinSettingsViewModelTest {
         val repository = FakeJellyfinRepository().apply {
             connectResult = Resource.Error("Connexion au serveur Jellyfin impossible. Vérifie l'URL et les identifiants.")
         }
-        val viewModel = JellyfinSettingsViewModel(repository)
+        val viewModel = viewModel(repository)
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -76,7 +86,7 @@ class JellyfinSettingsViewModelTest {
 
     @Test
     fun `une adresse en http signale une connexion non chiffree`() = runTest {
-        val viewModel = JellyfinSettingsViewModel(FakeJellyfinRepository())
+        val viewModel = viewModel(FakeJellyfinRepository())
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -94,7 +104,7 @@ class JellyfinSettingsViewModelTest {
     @Test
     fun `se deconnecter reinitialise le formulaire et le statut`() = runTest {
         val repository = FakeJellyfinRepository()
-        val viewModel = JellyfinSettingsViewModel(repository)
+        val viewModel = viewModel(repository)
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -109,6 +119,26 @@ class JellyfinSettingsViewModelTest {
         val state = viewModel.uiState.value
         assertNull(state.connectedUsername)
         assertEquals("", state.serverUrl)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `renvoyer l'historique appelle le repository et affiche le resultat`() = runTest {
+        val repository = FakeJellyfinRepository().apply {
+            setSession(JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token"))
+            pushWatchedHistoryResult = JellyfinPushHistoryResult(moviesMarkedPlayed = 2, episodesMarkedPlayed = 5)
+        }
+        val viewModel = viewModel(repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onPushHistoryClicked()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isPushingHistory)
+        assertEquals(JellyfinPushHistoryResult(2, 5), state.pushHistoryResult)
+        assertEquals(1, repository.pushedHistoryItems.size)
         collectorJob.cancel()
     }
 }
