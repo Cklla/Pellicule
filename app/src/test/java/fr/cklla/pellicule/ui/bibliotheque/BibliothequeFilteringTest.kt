@@ -76,4 +76,25 @@ class BibliothequeFilteringTest {
 
         assertEquals(listOf(duneVu2023, severance), result)
     }
+
+    @Test
+    fun `filtre par type ne garde que les contenus du type selectionne`() {
+        assertEquals(listOf(perfectBlue), filterMedia(media, BibliothequeFilter.TOUS, selectedType = MediaType.ANIME))
+        assertEquals(listOf(dune), filterMedia(media, BibliothequeFilter.TOUS, selectedType = MediaType.FILM))
+        assertEquals(listOf(severance), filterMedia(media, BibliothequeFilter.TOUS, selectedType = MediaType.SERIE))
+    }
+
+    @Test
+    fun `filtre par type se combine avec le filtre de statut`() {
+        val duneVu = dune.copy(status = WatchStatus.VU)
+
+        val result = filterMedia(listOf(perfectBlue, duneVu, severance), BibliothequeFilter.VU, selectedType = MediaType.FILM)
+
+        assertEquals(listOf(duneVu), result)
+    }
+
+    @Test
+    fun `filtre par type absent (null) ne restreint rien`() {
+        assertEquals(media, filterMedia(media, BibliothequeFilter.TOUS, selectedType = null))
+    }
 }
