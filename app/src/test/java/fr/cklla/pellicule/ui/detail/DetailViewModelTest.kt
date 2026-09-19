@@ -417,8 +417,10 @@ class DetailViewModelTest {
 
         assertEquals(WatchStatus.EN_COURS, viewModel.uiState.value.media?.status)
         assertTrue(episodeRepository.observeWatchedEpisodes(mediaId).first().isEmpty())
-        assertEquals(2, jellyfinRepository.pushedEpisodes.size)
-        assertTrue(jellyfinRepository.pushedEpisodes.all { !it.third })
+        // Démarquage en bloc sur la série, pas un appel par épisode.
+        assertEquals(1, jellyfinRepository.unwatchedSeries.size)
+        assertEquals(mediaId, jellyfinRepository.unwatchedSeries.first().id)
+        assertTrue(jellyfinRepository.pushedEpisodes.isEmpty())
         collectorJob.cancel()
     }
 

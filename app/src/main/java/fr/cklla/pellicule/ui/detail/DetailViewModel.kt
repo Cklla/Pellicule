@@ -201,12 +201,12 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             when (media.type) {
                 MediaType.FILM -> jellyfinRepository.pushMovieWatched(media, watched = false)
+                // Effacement en bloc (une transaction, un appel réseau) plutôt qu'épisode par
+                // épisode : sur une série de plusieurs centaines d'épisodes, une boucle d'appels
+                // réseau n'aurait aucune chance d'aboutir avant que l'écran ne soit quitté.
                 MediaType.SERIE, MediaType.ANIME -> {
-                    val watchedEpisodes = episodeRepository.observeWatchedEpisodes(media.id).first()
-                    watchedEpisodes.forEach { episode ->
-                        episodeRepository.setEpisodeWatched(media.id, episode, watched = false)
-                        jellyfinRepository.pushEpisodeWatched(media, episode.seasonNumber, episode.episodeNumber, watched = false)
-                    }
+                    episodeRepository.replaceWatchedEpisodes(media.id, emptySet())
+                    jellyfinRepository.pushSeriesUnwatched(media)
                 }
             }
         }

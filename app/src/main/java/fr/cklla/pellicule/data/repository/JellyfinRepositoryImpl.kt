@@ -94,15 +94,23 @@ class JellyfinRepositoryImpl @Inject constructor(
         // être "dévu" par le pull, y compris quand Jellyfin répond "non vu" pour un item qu'il
         // retrouve bien (serveur réinstallé, historique de lecture reparti de zéro) — Jellyfin fait
         // foi pour ajouter du vu, jamais pour en retirer.
-        val watched = episodeRepository.observeWatchedEpisodes(media.id).first() + watchedFromJellyfin
-        episodeRepository.replaceWatchedEpisodes(media.id, watched)
+        episodeRepository.replaceWatchedEpisodes(
+            media.id,
+            episodeRepository.observeWatchedEpisodes(media.id).first() + watchedFromJellyfin,
+        )
 
         // Liste vide = pas d'info exploitable (série non trouvée côté Jellyfin, ou réponse
         // incomplète) : on laisse le statut local tel quel plutôt que de le remettre à "à voir".
         if (episodes.isEmpty()) return
+        // Statut calculé sur les seules données du serveur, jamais sur la fusion locale ci-dessus :
+        // celle-ci accumule l'historique sans jamais le réduire, donc un contenu vu une première
+        // fois y resterait complet et se réimposerait "Vu" à chaque synchro, même après avoir été
+        // remis à un statut antérieur. La numérotation locale (métadonnées TMDB) peut en plus
+        // compter plus d'épisodes que ce que le serveur expose pour la même série, ce qui suffirait
+        // à franchir le seuil "tous vus" sans que ce soit le cas.
         val statusFromJellyfin = when {
-            watched.size >= episodes.size -> WatchStatus.VU
-            watched.isNotEmpty() -> WatchStatus.EN_COURS
+            watchedFromJellyfin.size >= episodes.size -> WatchStatus.VU
+            watchedFromJellyfin.isNotEmpty() -> WatchStatus.EN_COURS
             else -> WatchStatus.A_VOIR
         }
         // Même principe que pour les épisodes ci-dessus : le pull ne fait jamais régresser un
@@ -185,6 +193,31 @@ class JellyfinRepositoryImpl @Inject constructor(
             } else {
                 jellyfinApi.markUnplayed(url, authHeader(current.accessToken))
             }
+        }.onFailure(::disconnectIfUnauthorized)
+    }
+
+    override suspend fun pushSeriesUnwatched(media: Media) {
+        val current = session.value ?: return
+        runCatching {
+            val jellyfinId = resolveJellyfinId(current, media) ?: return
+            jellyfinApi.markUnplayed(
+                url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, jellyfinId),
+                authHeader = authHeader(current.accessToken),
+            )
+            // Filet de sécurité : si le serveur n'a pas propagé le démarquage à ses épisodes, on
+            // rattrape uniquement ceux encore signalés vus — donc aucun appel dans le cas normal.
+            jellyfinApi.getSeriesEpisodes(
+                url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
+                authHeader = authHeader(current.accessToken),
+                userId = current.userId,
+            ).items
+                .filter { it.userData?.played == true }
+                .forEach { episode ->
+                    jellyfinApi.markUnplayed(
+                        url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, episode.id),
+                        authHeader = authHeader(current.accessToken),
+                    )
+                }
         }.onFailure(::disconnectIfUnauthorized)
     }
 

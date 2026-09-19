@@ -65,6 +65,14 @@ interface JellyfinRepository {
     suspend fun pushMovieWatched(media: Media, watched: Boolean)
 
     /**
+     * Démarque en une fois tous les épisodes vus d'une SERIE/ANIME côté Jellyfin, en agissant sur
+     * l'item série (le serveur propage aux épisodes) plutôt qu'épisode par épisode : une série
+     * longue en compte plusieurs centaines, et [pushEpisodeWatched] relit la liste complète à
+     * chaque appel. Best-effort : ne fait rien sans session active, ignore un échec réseau.
+     */
+    suspend fun pushSeriesUnwatched(media: Media)
+
+    /**
      * Réinjecte vers Jellyfin l'historique de vus déjà connu en local (films en statut `VU`,
      * épisodes marqués vus) — prévu pour reconstituer le statut de lecture d'un serveur Jellyfin
      * réinstallé/vidé, où Pellicule devient alors la source de vérité le temps de cette action

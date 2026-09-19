@@ -286,6 +286,107 @@ class JellyfinRepositoryImplTest {
     }
 
     @Test
+    fun `syncTrackedSeries ne reimpose pas VU a une serie remise En cours quand Jellyfin ne signale plus rien de vu`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Kaamelott", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 100, jellyfinId = "jf-series-1"),
+        ) as Resource.Success).data
+        // L'historique local garde une trace des épisodes déjà vus lors d'un premier visionnage :
+        // il ne doit plus servir à recalculer le statut, sinon "Vu" se réimposerait indéfiniment.
+        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 1), watched = true)
+        episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 2), watched = true)
+        val api = FakeJellyfinApi().apply {
+            episodesBySeriesId = mapOf(
+                "jf-series-1" to listOf(
+                    JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 1, episodeNumber = 1, userData = JellyfinUserDataDto(played = false)),
+                    JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 1, episodeNumber = 2, userData = JellyfinUserDataDto(played = false)),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertEquals(WatchStatus.EN_COURS, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
+    fun `syncTrackedSeries ne passe pas VU quand le suivi local compte plus d'episodes que le serveur`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Kaamelott", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 100, jellyfinId = "jf-series-1"),
+        ) as Resource.Success).data
+        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        repeat(5) { index -> episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, index + 1), watched = true) }
+        // Le serveur n'expose que deux épisodes pour cette série (découpage différent de celui des
+        // métadonnées), dont un seul vu : la série est donc en cours, pas vue.
+        val api = FakeJellyfinApi().apply {
+            episodesBySeriesId = mapOf(
+                "jf-series-1" to listOf(
+                    JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 1, episodeNumber = 1, userData = JellyfinUserDataDto(played = true)),
+                    JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 1, episodeNumber = 2, userData = JellyfinUserDataDto(played = false)),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertEquals(WatchStatus.EN_COURS, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
+    fun `pushSeriesUnwatched demarque la serie en un appel et ne repasse pas par les episodes`() = runTest {
+        val media = Media(id = "media-1", title = "Kaamelott", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 100, jellyfinId = "jf-series-1")
+        val api = FakeJellyfinApi().apply {
+            episodesBySeriesId = mapOf(
+                "jf-series-1" to listOf(
+                    JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 1, episodeNumber = 1, userData = JellyfinUserDataDto(played = false)),
+                    JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 1, episodeNumber = 2, userData = JellyfinUserDataDto(played = false)),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session))
+
+        repository.pushSeriesUnwatched(media)
+
+        assertEquals(1, api.unplayedUrls.size)
+        assertTrue(api.unplayedUrls.first().contains("jf-series-1"))
+    }
+
+    @Test
+    fun `pushSeriesUnwatched rattrape les episodes encore vus si le serveur n'a pas propage`() = runTest {
+        val media = Media(id = "media-1", title = "Kaamelott", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 100, jellyfinId = "jf-series-1")
+        val api = FakeJellyfinApi().apply {
+            episodesBySeriesId = mapOf(
+                "jf-series-1" to listOf(
+                    JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 1, episodeNumber = 1, userData = JellyfinUserDataDto(played = true)),
+                    JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 1, episodeNumber = 2, userData = JellyfinUserDataDto(played = false)),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session))
+
+        repository.pushSeriesUnwatched(media)
+
+        assertTrue(api.unplayedUrls.any { it.contains("jf-series-1") })
+        assertTrue(api.unplayedUrls.any { it.contains("jf-ep-1") })
+        assertTrue(api.unplayedUrls.none { it.contains("jf-ep-2") })
+    }
+
+    @Test
+    fun `pushSeriesUnwatched ne fait rien sans session active`() = runTest {
+        val media = Media(id = "media-1", title = "Kaamelott", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 100, jellyfinId = "jf-series-1")
+        val api = FakeJellyfinApi()
+        val repository = repository(api, FakeJellyfinSessionStore(initial = null))
+
+        repository.pushSeriesUnwatched(media)
+
+        assertTrue(api.unplayedUrls.isEmpty())
+    }
+
+    @Test
     fun `pushMovieWatched demarque le film sur Jellyfin en utilisant le jellyfinId deja connu`() = runTest {
         val media = Media(id = "media-1", title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631, jellyfinId = "jf-movie-1")
         val api = FakeJellyfinApi()
