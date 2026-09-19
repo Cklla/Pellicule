@@ -108,4 +108,70 @@ class BibliothequeViewModelTest {
 
         collectorJob.cancel()
     }
+
+    @Test
+    fun `selectionner un type restreint la liste visible sans affecter les compteurs de statut`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        repository.addMedia(Media(title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.VU))
+        repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR))
+
+        val viewModel = BibliothequeViewModel(repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onTypeSelected(MediaType.FILM)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(1, state.visibleMedia.size)
+        assertEquals("Dune", state.visibleMedia.first().title)
+        assertEquals(2, state.filterCounts[BibliothequeFilter.TOUS])
+        assertEquals(MediaType.FILM, state.selectedType)
+
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `re-selectionner le meme type le desactive`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        repository.addMedia(Media(title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.VU))
+
+        val viewModel = BibliothequeViewModel(repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onTypeSelected(MediaType.ANIME)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(MediaType.ANIME, viewModel.uiState.value.selectedType)
+
+        viewModel.onTypeSelected(MediaType.ANIME)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(null, viewModel.uiState.value.selectedType)
+
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `le filtre par type reste actif quand on change d'onglet de statut`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        repository.addMedia(Media(title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.VU))
+        repository.addMedia(Media(title = "One Piece", type = MediaType.ANIME, status = WatchStatus.A_VOIR))
+        repository.addMedia(Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR))
+
+        val viewModel = BibliothequeViewModel(repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onTypeSelected(MediaType.ANIME)
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onFilterSelected(BibliothequeFilter.A_VOIR)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(MediaType.ANIME, state.selectedType)
+        assertEquals(1, state.visibleMedia.size)
+        assertEquals("One Piece", state.visibleMedia.first().title)
+
+        collectorJob.cancel()
+    }
 }

@@ -3,6 +3,7 @@ package fr.cklla.pellicule.ui.bibliotheque
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,19 +19,22 @@ class BibliothequeViewModel @Inject constructor(
 
     private val selectedFilter = MutableStateFlow(BibliothequeFilter.TOUS)
     private val selectedWatchedYear = MutableStateFlow<Int?>(null)
+    private val selectedType = MutableStateFlow<MediaType?>(null)
 
     val uiState: StateFlow<BibliothequeUiState> = combine(
         mediaRepository.observeMedia(),
         selectedFilter,
         selectedWatchedYear,
-    ) { media, filter, watchedYear ->
+        selectedType,
+    ) { media, filter, watchedYear, type ->
         BibliothequeUiState(
             isLoading = false,
-            visibleMedia = filterMedia(media, filter, watchedYear),
+            visibleMedia = filterMedia(media, filter, watchedYear, type),
             selectedFilter = filter,
             filterCounts = countByFilter(media),
             availableWatchedYears = availableWatchedYears(media),
             selectedWatchedYear = watchedYear,
+            selectedType = type,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -42,11 +46,17 @@ class BibliothequeViewModel @Inject constructor(
         selectedFilter.value = filter
         // Le filtre par année n'a de sens que sous "Vu" (voir `filterMedia`) : changer de filtre
         // de statut repart d'une sélection d'année propre plutôt que de garder un choix invisible.
+        // Le filtre par type, lui, s'applique sur tous les onglets et reste donc actif.
         selectedWatchedYear.value = null
     }
 
     /** Re-sélectionner l'année déjà active la désélectionne (retour à "Toutes les années"). */
     fun onWatchedYearSelected(year: Int?) {
         selectedWatchedYear.value = if (year != null && selectedWatchedYear.value == year) null else year
+    }
+
+    /** Re-sélectionner le type déjà actif le désélectionne (retour à "Tous les types"). */
+    fun onTypeSelected(type: MediaType?) {
+        selectedType.value = if (type != null && selectedType.value == type) null else type
     }
 }

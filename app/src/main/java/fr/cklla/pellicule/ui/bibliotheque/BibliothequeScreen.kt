@@ -66,6 +66,7 @@ fun BibliothequeScreen(
         uiState = uiState,
         onFilterSelected = viewModel::onFilterSelected,
         onWatchedYearSelected = viewModel::onWatchedYearSelected,
+        onTypeSelected = viewModel::onTypeSelected,
         onMediaClick = onMediaClick,
         modifier = modifier,
     )
@@ -76,6 +77,7 @@ private fun BibliothequeContent(
     uiState: BibliothequeUiState,
     onFilterSelected: (BibliothequeFilter) -> Unit,
     onWatchedYearSelected: (Int?) -> Unit,
+    onTypeSelected: (MediaType?) -> Unit,
     onMediaClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -89,6 +91,10 @@ private fun BibliothequeContent(
             selectedFilter = uiState.selectedFilter,
             counts = uiState.filterCounts,
             onFilterSelected = onFilterSelected,
+        )
+        TypeChipsRow(
+            selectedType = uiState.selectedType,
+            onTypeSelected = onTypeSelected,
         )
         if (uiState.selectedFilter == BibliothequeFilter.VU && uiState.availableWatchedYears.isNotEmpty()) {
             YearChipsRow(
@@ -189,14 +195,14 @@ private fun YearChipsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            YearChip(
+            SecondaryChip(
                 label = stringResource(R.string.filter_annee_toutes),
                 selected = selectedYear == null,
                 onClick = { onYearSelected(null) },
             )
         }
         items(items = years, key = { it }) { year ->
-            YearChip(
+            SecondaryChip(
                 label = year.toString(),
                 selected = year == selectedYear,
                 onClick = { onYearSelected(year) },
@@ -206,7 +212,7 @@ private fun YearChipsRow(
 }
 
 @Composable
-private fun YearChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun SecondaryChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .heightIn(min = 40.dp)
@@ -224,6 +230,32 @@ private fun YearChip(label: String, selected: Boolean, onClick: () -> Unit) {
             color = if (selected) TextPrimary else TextTertiary,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
         )
+    }
+}
+
+@Composable
+private fun TypeChipsRow(
+    selectedType: MediaType?,
+    onTypeSelected: (MediaType?) -> Unit,
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            SecondaryChip(
+                label = stringResource(R.string.filter_type_tous),
+                selected = selectedType == null,
+                onClick = { onTypeSelected(null) },
+            )
+        }
+        items(items = MediaType.entries, key = { it.name }) { type ->
+            SecondaryChip(
+                label = stringResource(type.labelRes()),
+                selected = type == selectedType,
+                onClick = { onTypeSelected(type) },
+            )
+        }
     }
 }
 
@@ -329,6 +361,7 @@ private fun BibliothequeContentPreview() {
             ),
             onFilterSelected = {},
             onWatchedYearSelected = {},
+            onTypeSelected = {},
             onMediaClick = {},
         )
     }
@@ -354,6 +387,7 @@ private fun BibliothequeVuAvecAnneesPreview() {
             ),
             onFilterSelected = {},
             onWatchedYearSelected = {},
+            onTypeSelected = {},
             onMediaClick = {},
         )
     }
@@ -367,6 +401,7 @@ private fun BibliothequeEmptyPreview() {
             uiState = BibliothequeUiState(isLoading = false, selectedFilter = BibliothequeFilter.VU),
             onFilterSelected = {},
             onWatchedYearSelected = {},
+            onTypeSelected = {},
             onMediaClick = {},
         )
     }
