@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -133,6 +134,10 @@ private fun DetailContent(
     modifier: Modifier = Modifier,
 ) {
     var showRemoveConfirm by rememberSaveable { mutableStateOf(false) }
+    // Repasser un contenu "Vu" à un autre statut démarque aussi ce qu'il efface sur Jellyfin
+    // (épisodes ou film, voir `DetailViewModel.onStatusSelected`) : effet visible sur le serveur
+    // réel et les autres clients (Moonfin), donc confirmation avant d'agir, comme pour le retrait.
+    var pendingStatusReset by remember { mutableStateOf<WatchStatus?>(null) }
 
     Column(
         modifier = modifier
@@ -166,7 +171,16 @@ private fun DetailContent(
             // masqués tant que la fiche n'est qu'un aperçu ouvert depuis la Recherche (voir
             // `DetailUiState.isInBacklog`).
             if (isInBacklog) {
-                StatusSection(selected = media.status, onStatusSelected = onStatusSelected)
+                StatusSection(
+                    selected = media.status,
+                    onStatusSelected = { status ->
+                        if (media.status == WatchStatus.VU && status != WatchStatus.VU) {
+                            pendingStatusReset = status
+                        } else {
+                            onStatusSelected(status)
+                        }
+                    },
+                )
                 RatingSection(rating = media.rating, onRatingSelected = onRatingSelected)
                 if (media.type != MediaType.FILM) {
                     EpisodesSection(
@@ -193,6 +207,16 @@ private fun DetailContent(
                 onRemoveMedia()
             },
             onDismiss = { showRemoveConfirm = false },
+        )
+    }
+
+    pendingStatusReset?.let { targetStatus ->
+        StatusResetConfirmDialog(
+            onConfirm = {
+                pendingStatusReset = null
+                onStatusSelected(targetStatus)
+            },
+            onDismiss = { pendingStatusReset = null },
         )
     }
 }
@@ -506,6 +530,28 @@ private fun RemoveConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(text = stringResource(R.string.detail_remove_confirm_cancel), color = TextTertiary)
+            }
+        },
+    )
+}
+
+@Composable
+private fun StatusResetConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceCard,
+        titleContentColor = TextPrimary,
+        textContentColor = TextTertiary,
+        title = { Text(stringResource(R.string.detail_status_reset_confirm_title)) },
+        text = { Text(stringResource(R.string.detail_status_reset_confirm_message)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = stringResource(R.string.detail_status_reset_confirm_confirm), color = ErrorCoral)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.detail_status_reset_confirm_cancel), color = TextTertiary)
             }
         },
     )

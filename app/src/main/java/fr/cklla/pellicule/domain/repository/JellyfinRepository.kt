@@ -16,7 +16,11 @@ import kotlinx.coroutines.flow.StateFlow
  * lecture direct de l'item). **Jellyfin ne fait foi que pour progresser** : le pull ne fait
  * jamais régresser un statut ou dévoir un épisode déjà connu localement (protection contre un
  * historique de lecture perdu côté serveur, ex. réinstallation Jellyfin) — voir [pushWatchedHistory]
- * pour reconstituer l'historique serveur dans ce cas.
+ * pour reconstituer l'historique serveur dans ce cas. Cette protection ne peut pas distinguer un
+ * serveur qui a perdu son historique d'un contenu qu'on recommence à voir : un retour manuel en
+ * arrière dans Pellicule (repasser un contenu "Vu" à un autre statut) doit donc explicitement
+ * démarquer ce qu'il efface côté Jellyfin ([pushEpisodeWatched]/[pushMovieWatched] avec
+ * `watched = false`), sinon le prochain pull le réimposerait "Vu" immédiatement.
  */
 interface JellyfinRepository {
 
@@ -52,6 +56,13 @@ interface JellyfinRepository {
      * prochain [syncTrackedSeries] rattrapera l'écart).
      */
     suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean)
+
+    /**
+     * Pousse le statut de lecture d'un FILM vers Jellyfin, juste après une action locale (même
+     * principe que [pushEpisodeWatched] pour les épisodes). Best-effort : ne fait rien si aucune
+     * session n'est active, ignore silencieusement un échec réseau.
+     */
+    suspend fun pushMovieWatched(media: Media, watched: Boolean)
 
     /**
      * Réinjecte vers Jellyfin l'historique de vus déjà connu en local (films en statut `VU`,
