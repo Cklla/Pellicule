@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -134,7 +135,7 @@ private fun SearchBar(query: String, onQueryChanged: (String) -> Unit, modifier:
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(imageVector = Icons.Outlined.Search, contentDescription = null, tint = TextMuted)
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.weight(1f)) {
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChanged,
@@ -149,6 +150,22 @@ private fun SearchBar(query: String, onQueryChanged: (String) -> Unit, modifier:
                     innerTextField()
                 },
             )
+        }
+        if (query.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable { onQueryChanged("") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.recherche_clear_search_content_description),
+                    tint = TextMuted,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }

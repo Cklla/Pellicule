@@ -63,6 +63,7 @@
     <string name="recherche_empty_title">Aucun résultat</string>
     <string name="recherche_empty_message">Aucun contenu ne correspond à « %1$s ». Essaie un autre titre.</string>
     <string name="recherche_add_content_description">Ajouter « %1$s » au suivi</string>
+    <string name="recherche_clear_search_content_description">Effacer la recherche</string>
     <string name="recherche_added_label">Ajouté</string>
     <string-array name="recherche_suggestions">
         <item>Dune</item>
