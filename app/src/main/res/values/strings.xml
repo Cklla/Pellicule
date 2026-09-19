@@ -37,6 +37,12 @@
     <!-- Écran Détail -->
     <string name="detail_back">Retour à la bibliothèque</string>
     <string name="detail_synopsis_label">Synopsis</string>
+    <string name="detail_availability_label">Disponibilité</string>
+    <string name="detail_availability_streaming">Disponible en streaming sur :</string>
+    <string name="detail_availability_rent_buy">Disponible à la location ou l\'achat sur :</string>
+    <string name="detail_availability_none">Non disponible</string>
+    <string name="detail_availability_unknown">Inconnu</string>
+    <string name="detail_availability_justwatch">Données de streaming fournies par JustWatch</string>
     <string name="detail_status_label">Statut</string>
     <string name="detail_status_reset_confirm_title">Repasser ce contenu à un autre statut ?</string>
     <string name="detail_status_reset_confirm_message">La progression détaillée (épisodes vus, ou lecture du film) sera effacée, y compris sur Jellyfin et les autres appareils connectés.</string>

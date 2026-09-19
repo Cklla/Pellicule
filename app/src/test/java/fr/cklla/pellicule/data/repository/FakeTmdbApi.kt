@@ -8,6 +8,7 @@ import fr.cklla.pellicule.data.remote.dto.TmdbSearchResultDto
 import fr.cklla.pellicule.data.remote.dto.TmdbSeasonDto
 import fr.cklla.pellicule.data.remote.dto.TmdbSeasonSummaryDto
 import fr.cklla.pellicule.data.remote.dto.TmdbTvDetailsDto
+import fr.cklla.pellicule.data.remote.dto.TmdbWatchProvidersResponseDto
 
 /** Faux client TMDB en mémoire, pour tester les repositories qui en dépendent sans appel réseau réel. */
 class FakeTmdbApi : TmdbApi {
@@ -17,6 +18,8 @@ class FakeTmdbApi : TmdbApi {
     var episodes: List<TmdbEpisodeDto> = emptyList()
     /** Synopsis par langue (`"fr-FR"`/`"en-US"`), pour tester le repli de langue de [getTvDetails]/[getMovieDetails]. */
     var overviewByLanguage: Map<String, String?> = emptyMap()
+    /** Offres par code pays, telles que renvoyées par les endpoints `watch/providers`. */
+    var watchProviders = TmdbWatchProvidersResponseDto()
     var shouldThrow = false
 
     override suspend fun searchMulti(apiKey: String, query: String, language: String, includeAdult: Boolean): TmdbSearchResponseDto {
@@ -37,5 +40,15 @@ class FakeTmdbApi : TmdbApi {
     override suspend fun getMovieDetails(movieId: Long, apiKey: String, language: String): TmdbMovieDetailsDto {
         if (shouldThrow) error("Échec réseau simulé")
         return TmdbMovieDetailsDto(overview = overviewByLanguage[language])
+    }
+
+    override suspend fun getMovieWatchProviders(movieId: Long, apiKey: String): TmdbWatchProvidersResponseDto {
+        if (shouldThrow) error("Échec réseau simulé")
+        return watchProviders
+    }
+
+    override suspend fun getTvWatchProviders(tvId: Long, apiKey: String): TmdbWatchProvidersResponseDto {
+        if (shouldThrow) error("Échec réseau simulé")
+        return watchProviders
     }
 }

@@ -15,6 +15,7 @@ import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
 import fr.cklla.pellicule.data.repository.MediaSearchRepositoryImpl
 import fr.cklla.pellicule.data.repository.SynopsisRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvDetailsRepositoryImpl
+import fr.cklla.pellicule.data.repository.WatchProvidersRepositoryImpl
 import fr.cklla.pellicule.domain.repository.AuthRepository
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
@@ -22,6 +23,7 @@ import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.repository.MediaSearchRepository
 import fr.cklla.pellicule.domain.repository.SynopsisRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
+import fr.cklla.pellicule.domain.repository.WatchProvidersRepository
 import javax.inject.Singleton
 
 /** Lie les interfaces de repository à leur implémentation concrète, pour que les ViewModels ne
@@ -49,6 +51,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSynopsisRepository(impl: SynopsisRepositoryImpl): SynopsisRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWatchProvidersRepository(impl: WatchProvidersRepositoryImpl): WatchProvidersRepository
 
     @Binds
     @Singleton
