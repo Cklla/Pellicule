@@ -84,3 +84,4 @@ dependency_scan:
       - .gradle/
       - .gradle/caches/
       - .gradle/wrapper/
+      - .gradle/dependency-check-data/
