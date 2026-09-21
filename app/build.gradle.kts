@@ -36,7 +36,6 @@ dependencyCheck {
     formats = listOf("HTML")
     nvd {
         apiKey = System.getenv("NVD_API_KEY")
-        delay = 16000
     }
 }
 
