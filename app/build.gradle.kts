@@ -10,6 +10,8 @@ plugins {
     // Lit google-services.json et génère les ressources/config nécessaires aux SDK Firebase
     // (Auth, Firestore) à la compilation.
     alias(libs.plugins.google.services)
+    // Scan de sécurité
+    alias(libs.plugins.owasp.dependencycheck)
 }
 
 // La clé API TMDB vit uniquement dans local.properties, jamais dans le code source. On l'expose
@@ -27,6 +29,14 @@ val keystoreProperties = Properties().apply {
     val keystorePropertiesFile = rootProject.file("keystore.properties")
     if (keystorePropertiesFile.exists()) {
         FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+
+dependencyCheck {
+    formats = listOf("HTML")
+    nvd {
+        apiKey = System.getenv("NVD_API_KEY")
+        delay = 16000
     }
 }
 
