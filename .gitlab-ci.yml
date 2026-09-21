@@ -30,3 +30,57 @@ unit_tests:
       - .gradle/
       - .gradle/caches/
       - .gradle/wrapper/
+
+# Scan de secrets (clés API, tokens...) accidentellement commités.
+# Tourne à chaque push sur main.
+# gitleaks lit l'historique git lui-même : GIT_DEPTH à 0 pour que le clone
+# GitLab CI ne soit pas tronqué et que tout l'historique soit bien scanné.
+secret_scan:
+  stage: test
+  tags:
+    - linux-docker
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - gitleaks detect --source . --no-banner --redact --report-format json --report-path gitleaks-report.json
+  artifacts:
+    when: always
+    paths:
+      - gitleaks-report.json
+    expire_in: 1 week
+
+# Scan des dépendances Gradle pour des CVE connues (OWASP Dependency-Check).
+# Hebdomadaire uniquement.
+#
+# Prérequis avant que ce job fonctionne :
+#   1. Ajouter le plugin org.owasp.dependencycheck à build.gradle.kts
+#   2. Une variable CI/CD masquée NVD_API_KEY (clé gratuite sur nvd.nist.gov)
+dependency_scan:
+  stage: test
+  tags:
+    - linux-docker
+  image: ghcr.io/cirruslabs/android-sdk:36
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  variables:
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+    GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8"
+  before_script:
+    - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
+    - chmod +x ./gradlew
+  script:
+    - ./gradlew dependencyCheckAnalyze --no-daemon --stacktrace
+  artifacts:
+    when: always
+    paths:
+      - "**/build/reports/dependency-check-report.html"
+    expire_in: 1 week
+  cache:
+    key: gradle-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .gradle/
+      - .gradle/caches/
+      - .gradle/wrapper/
