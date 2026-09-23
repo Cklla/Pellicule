@@ -1,87 +1,50 @@
+# =============================================================================
+# CI Pellicule — les jobs proviennent du socle partage Cklla/ci-templates.
+#
+# Ce fichier ne contient QUE ce qui est propre a Pellicule : le stage, la
+# reference au socle, et la preparation Firebase. Toute correction apportee
+# aux jobs eux-memes se fait dans ci-templates puis se recupere ici en
+# changeant `ref`.
+#
+# Prerequis cote GitLab (Settings > CI/CD > Variables) :
+#   GOOGLE_SERVICES_JSON  fichier, le google-services.json du projet Firebase
+# La variable NVD_API_KEY n'est plus utilisee : le scan de vulnerabilites ne
+# s'appuie plus sur la base NVD.
+# =============================================================================
+
+include:
+  - project: 'Cklla/ci-templates'
+    ref: 'v1.2.1'
+    file:
+      # unit_tests
+      - '/templates/gradle-tests.gitlab-ci.yml'
+      # secret_scan
+      - '/templates/secret-scan.gitlab-ci.yml'
+      # dependency_inventory + dependency_scan
+      - '/templates/gradle-security.gitlab-ci.yml'
+
 stages:
   - test
 
-unit_tests:
-  stage: test
-  tags:
-    - linux-docker
-  image: ghcr.io/cirruslabs/android-sdk:36
-  variables:
-    # Gradle : cache local au projet et options mémoire raisonnables
-    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
-    GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8"
-  before_script:
-    - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
-    - chmod +x ./gradlew
-    - java -version
-  script:
-    - ./gradlew test --no-daemon --stacktrace
-  artifacts:
-    when: always
-    paths:
-      - "**/build/reports/tests/"
-    expire_in: 1 week
-    reports:
-      junit:
-        - "**/build/test-results/test*/TEST-*.xml"
-  cache:
-    key: gradle-${CI_COMMIT_REF_SLUG}
-    paths:
-      - .gradle/
-      - .gradle/caches/
-      - .gradle/wrapper/
-
-# Scan de secrets (clés API, tokens...) accidentellement commités.
-# Tourne à chaque push sur main.
-# gitleaks lit l'historique git lui-même : GIT_DEPTH à 0 pour que le clone
-# GitLab CI ne soit pas tronqué et que tout l'historique soit bien scanné.
-secret_scan:
-  stage: test
-  tags:
-    - linux-docker
-  image:
-    name: zricethezav/gitleaks:latest
-    entrypoint: [""]
-  variables:
-    GIT_DEPTH: "0"
-  script:
-    - gitleaks detect --source . --no-banner --redact --report-format json --report-path gitleaks-report.json
-  artifacts:
-    when: always
-    paths:
-      - gitleaks-report.json
-    expire_in: 1 week
-
-# Scan des dépendances Gradle pour des CVE connues (OWASP Dependency-Check).
-# Hebdomadaire uniquement.
+# -----------------------------------------------------------------------------
+# Surcharges propres au projet.
 #
-# Prérequis avant que ce job fonctionne :
-#   1. Ajouter le plugin org.owasp.dependencycheck à build.gradle.kts
-#   2. Une variable CI/CD masquée NVD_API_KEY (clé gratuite sur nvd.nist.gov)
-dependency_scan:
-  stage: test
-  tags:
-    - linux-docker
-  image: ghcr.io/cirruslabs/android-sdk:36
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-  variables:
-    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
-    GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8"
+# Les plugins Firebase (google-services) lisent google-services.json des la
+# phase de CONFIGURATION Gradle : sans ce fichier, meme une simple resolution
+# de dependances echoue. Les deux jobs qui invoquent Gradle en ont donc besoin.
+#
+# Attention : en GitLab CI une surcharge REMPLACE la cle, elle ne s'y ajoute
+# pas. Les templates laissent `before_script` vide a dessein pour que ces
+# blocs ne fassent rien perdre.
+#
+# La cle TMDB n'est PAS necessaire ici : app/build.gradle.kts la lit dans
+# local.properties avec une valeur par defaut vide, la compilation et les
+# tests unitaires n'en dependent pas.
+# -----------------------------------------------------------------------------
+unit_tests:
   before_script:
     - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
-    - chmod +x ./gradlew
-  script:
-    - ./gradlew dependencyCheckAnalyze --no-daemon --stacktrace
-  artifacts:
-    when: always
-    paths:
-      - "**/build/reports/dependency-check-report.html"
-    expire_in: 1 week
-  cache:
-    key: gradle-${CI_COMMIT_REF_SLUG}
-    paths:
-      - .gradle/
-      - .gradle/caches/
-      - .gradle/wrapper/
-      - .gradle/dependency-check-data/
+
+dependency_inventory:
+  before_script:
+    - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
