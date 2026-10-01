@@ -13,7 +13,9 @@ import fr.cklla.pellicule.data.local.MIGRATION_1_2
 import fr.cklla.pellicule.data.local.MIGRATION_2_3
 import fr.cklla.pellicule.data.local.MIGRATION_3_4
 import fr.cklla.pellicule.data.local.MIGRATION_4_5
+import fr.cklla.pellicule.data.local.MIGRATION_5_6
 import fr.cklla.pellicule.data.local.MediaDao
+import fr.cklla.pellicule.data.local.TvShowCacheDao
 import javax.inject.Singleton
 
 /** Fournit la base Room, unique pour toute la durée de vie de l'application. */
@@ -25,7 +27,7 @@ object DatabaseModule {
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "pellicule.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
             .build()
 
     @Provides
@@ -33,4 +35,7 @@ object DatabaseModule {
 
     @Provides
     fun provideEpisodeDao(database: AppDatabase): EpisodeDao = database.episodeDao()
+
+    @Provides
+    fun provideTvShowCacheDao(database: AppDatabase): TvShowCacheDao = database.tvShowCacheDao()
 }
