@@ -18,12 +18,6 @@ class EpisodeRepositoryImpl @Inject constructor(
         episodeDao.observeWatched(mediaId)
             .map { entities -> entities.map { EpisodeKey(it.seasonNumber, it.episodeNumber) }.toSet() }
 
-    override fun observeAllWatchedEpisodes(): Flow<Map<String, Set<EpisodeKey>>> =
-        episodeDao.observeAllWatched().map { entities ->
-            entities.groupBy({ it.mediaId }, { EpisodeKey(it.seasonNumber, it.episodeNumber) })
-                .mapValues { it.value.toSet() }
-        }
-
     override suspend fun setEpisodeWatched(mediaId: String, episode: EpisodeKey, watched: Boolean): Resource<Unit> =
         runCatching {
             if (watched) {

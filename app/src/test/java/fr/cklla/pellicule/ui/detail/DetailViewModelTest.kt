@@ -5,7 +5,6 @@ import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
 import fr.cklla.pellicule.data.repository.FakeEpisodeDao
 import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
 import fr.cklla.pellicule.data.repository.FakeMediaDao
-import fr.cklla.pellicule.data.repository.FakeTvShowInfoRepository
 import fr.cklla.pellicule.data.repository.fakeMediaRepository
 import fr.cklla.pellicule.domain.model.EpisodeInfo
 import fr.cklla.pellicule.domain.model.EpisodeKey
@@ -20,8 +19,6 @@ import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
-import fr.cklla.pellicule.domain.usecase.SetEpisodeWatchedUseCase
-import fr.cklla.pellicule.domain.util.TimeSource
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,7 +59,6 @@ class DetailViewModelTest {
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
         watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
-        tvShowInfoRepository: FakeTvShowInfoRepository = FakeTvShowInfoRepository(),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf(PelliculeDestinations.DETAIL_ARG_MEDIA_ID to mediaId)),
         mediaRepository = mediaRepository,
@@ -71,13 +67,6 @@ class DetailViewModelTest {
         jellyfinRepository = jellyfinRepository,
         synopsisRepository = synopsisRepository,
         watchProvidersRepository = watchProvidersRepository,
-        setEpisodeWatched = SetEpisodeWatchedUseCase(
-            mediaRepository,
-            episodeRepository,
-            tvShowInfoRepository,
-            jellyfinRepository,
-            TimeSource { 1_790_000_000_000L },
-        ),
     )
 
     private fun previewViewModelFor(
@@ -92,7 +81,6 @@ class DetailViewModelTest {
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
         watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
-        tvShowInfoRepository: FakeTvShowInfoRepository = FakeTvShowInfoRepository(),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(
             mapOf(
@@ -109,13 +97,6 @@ class DetailViewModelTest {
         jellyfinRepository = jellyfinRepository,
         synopsisRepository = synopsisRepository,
         watchProvidersRepository = watchProvidersRepository,
-        setEpisodeWatched = SetEpisodeWatchedUseCase(
-            mediaRepository,
-            episodeRepository,
-            tvShowInfoRepository,
-            jellyfinRepository,
-            TimeSource { 1_790_000_000_000L },
-        ),
     )
 
     @Test
@@ -357,23 +338,14 @@ class DetailViewModelTest {
     @Test
     fun `un apercu sans tmdbId valide n'a pas de contenu`() = runTest {
         val repository = fakeMediaRepository(FakeMediaDao())
-        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
-        val jellyfinRepository = FakeJellyfinRepository()
         val viewModel = DetailViewModel(
             savedStateHandle = SavedStateHandle(emptyMap()),
             mediaRepository = repository,
             tvDetailsRepository = FakeTvDetailsRepository(),
-            episodeRepository = episodeRepository,
-            jellyfinRepository = jellyfinRepository,
+            episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
+            jellyfinRepository = FakeJellyfinRepository(),
             synopsisRepository = FakeSynopsisRepository(),
             watchProvidersRepository = FakeWatchProvidersRepository(),
-            setEpisodeWatched = SetEpisodeWatchedUseCase(
-                repository,
-                episodeRepository,
-                FakeTvShowInfoRepository(),
-                jellyfinRepository,
-                TimeSource { 1_790_000_000_000L },
-            ),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()
@@ -555,58 +527,6 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(jellyfinRepository.pushedMovies.isEmpty())
-        collectorJob.cancel()
-    }
-    @Test
-    fun `cocher un episode d'un contenu A voir le passe En cours dans l'etat`() = runTest {
-        val repository = fakeMediaRepository(FakeMediaDao())
-        val mediaId = (repository.addMedia(
-            Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.A_VOIR, tmdbId = 95396),
-        ) as Resource.Success).data
-        val tvDetailsRepository = FakeTvDetailsRepository().apply {
-            seasonsResponse = Resource.Success(listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 2, posterUrl = null)))
-            defaultEpisodesResponse = Resource.Success(
-                listOf(EpisodeInfo(seasonNumber = 1, episodeNumber = 1, title = "Bon travail", stillUrl = null)),
-            )
-        }
-
-        val viewModel = viewModelFor(mediaId, repository, tvDetailsRepository)
-        val collectorJob = launch { viewModel.uiState.collect {} }
-        dispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.onEpisodeWatchedToggled(viewModel.uiState.value.episodes.first())
-        dispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(WatchStatus.EN_COURS, viewModel.uiState.value.media?.status)
-        assertEquals(WatchStatus.EN_COURS, repository.observeMediaById(mediaId).first()?.status)
-        collectorJob.cancel()
-    }
-
-    @Test
-    fun `une edition apres avoir coche un episode ne ramene pas l'ancien statut`() = runTest {
-        val repository = fakeMediaRepository(FakeMediaDao())
-        val mediaId = (repository.addMedia(
-            Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.A_VOIR, tmdbId = 95396),
-        ) as Resource.Success).data
-        val tvDetailsRepository = FakeTvDetailsRepository().apply {
-            seasonsResponse = Resource.Success(listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 2, posterUrl = null)))
-            defaultEpisodesResponse = Resource.Success(
-                listOf(EpisodeInfo(seasonNumber = 1, episodeNumber = 1, title = "Bon travail", stillUrl = null)),
-            )
-        }
-
-        val viewModel = viewModelFor(mediaId, repository, tvDetailsRepository)
-        val collectorJob = launch { viewModel.uiState.collect {} }
-        dispatcher.scheduler.advanceUntilIdle()
-        viewModel.onEpisodeWatchedToggled(viewModel.uiState.value.episodes.first())
-        dispatcher.scheduler.advanceUntilIdle()
-
-        viewModel.onRatingSelected(4)
-        dispatcher.scheduler.advanceUntilIdle()
-
-        val stored = repository.observeMediaById(mediaId).first()
-        assertEquals(WatchStatus.EN_COURS, stored?.status)
-        assertEquals(4, stored?.rating)
         collectorJob.cancel()
     }
 }

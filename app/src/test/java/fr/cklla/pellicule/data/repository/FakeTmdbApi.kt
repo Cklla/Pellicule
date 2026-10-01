@@ -2,7 +2,6 @@ package fr.cklla.pellicule.data.repository
 
 import fr.cklla.pellicule.data.remote.TmdbApi
 import fr.cklla.pellicule.data.remote.dto.TmdbEpisodeDto
-import fr.cklla.pellicule.data.remote.dto.TmdbEpisodeToAirDto
 import fr.cklla.pellicule.data.remote.dto.TmdbMovieDetailsDto
 import fr.cklla.pellicule.data.remote.dto.TmdbSearchResponseDto
 import fr.cklla.pellicule.data.remote.dto.TmdbSearchResultDto
@@ -22,13 +21,6 @@ class FakeTmdbApi : TmdbApi {
     /** Offres par code pays, telles que renvoyées par les endpoints `watch/providers`. */
     var watchProviders = TmdbWatchProvidersResponseDto()
     var shouldThrow = false
-    /** Statut TMDB de la série (`Ended`, `Returning Series`...) et épisodes charnières renvoyés par [getTvDetails]. */
-    var tvStatus: String? = null
-    var lastEpisodeToAir: TmdbEpisodeToAirDto? = null
-    var nextEpisodeToAir: TmdbEpisodeToAirDto? = null
-    /** Nombre d'appels reçus, pour vérifier qu'un cache valide évite de retourner sur le réseau. */
-    var tvDetailsCalls = 0
-    var tvSeasonCalls = 0
 
     override suspend fun searchMulti(apiKey: String, query: String, language: String, includeAdult: Boolean): TmdbSearchResponseDto {
         if (shouldThrow) error("Échec réseau simulé")
@@ -36,19 +28,11 @@ class FakeTmdbApi : TmdbApi {
     }
 
     override suspend fun getTvDetails(tvId: Long, apiKey: String, language: String): TmdbTvDetailsDto {
-        tvDetailsCalls++
         if (shouldThrow) error("Échec réseau simulé")
-        return TmdbTvDetailsDto(
-            seasons = seasons,
-            overview = overviewByLanguage[language],
-            status = tvStatus,
-            lastEpisodeToAir = lastEpisodeToAir,
-            nextEpisodeToAir = nextEpisodeToAir,
-        )
+        return TmdbTvDetailsDto(seasons = seasons, overview = overviewByLanguage[language])
     }
 
     override suspend fun getTvSeason(tvId: Long, seasonNumber: Int, apiKey: String, language: String): TmdbSeasonDto {
-        tvSeasonCalls++
         if (shouldThrow) error("Échec réseau simulé")
         return TmdbSeasonDto(episodes = episodes)
     }

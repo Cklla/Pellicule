@@ -20,7 +20,6 @@ import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.repository.SynopsisRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
 import fr.cklla.pellicule.domain.repository.WatchProvidersRepository
-import fr.cklla.pellicule.domain.usecase.SetEpisodeWatchedUseCase
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,7 +34,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -65,7 +63,6 @@ class DetailViewModel @Inject constructor(
     private val jellyfinRepository: JellyfinRepository,
     private val synopsisRepository: SynopsisRepository,
     private val watchProvidersRepository: WatchProvidersRepository,
-    private val setEpisodeWatched: SetEpisodeWatchedUseCase,
 ) : ViewModel() {
 
     private val mediaId: String? = savedStateHandle[PelliculeDestinations.DETAIL_ARG_MEDIA_ID]
@@ -258,16 +255,14 @@ class DetailViewModel @Inject constructor(
         val media = workingMedia.value?.takeIf { it.id.isNotEmpty() } ?: return
         val watched = !episode.watched
         viewModelScope.launch {
-            setEpisodeWatched(media.id, EpisodeKey(episode.seasonNumber, episode.episodeNumber), watched) { updated ->
-                // Cocher un épisode peut changer le statut global (et `watchedAt`) : la copie de
-                // travail doit les reprendre, sinon la prochaine édition (note, statut) les
-                // réécrirait avec leurs anciennes valeurs.
-                workingMedia.update { current ->
-                    current?.takeIf { it.id == updated.id }
-                        ?.copy(status = updated.status, watchedAt = updated.watchedAt, jellyfinId = updated.jellyfinId ?: current.jellyfinId)
-                        ?: current
-                }
-            }
+            episodeRepository.setEpisodeWatched(
+                mediaId = media.id,
+                episode = EpisodeKey(episode.seasonNumber, episode.episodeNumber),
+                watched = watched,
+            )
+            // Best-effort, silencieux : voir `JellyfinRepository.pushEpisodeWatched` (no-op sans
+            // session active, un prochain sync global rattrape un éventuel échec réseau).
+            jellyfinRepository.pushEpisodeWatched(media, episode.seasonNumber, episode.episodeNumber, watched)
         }
     }
 

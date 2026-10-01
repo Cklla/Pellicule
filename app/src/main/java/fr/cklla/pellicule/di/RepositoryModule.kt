@@ -15,7 +15,6 @@ import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
 import fr.cklla.pellicule.data.repository.MediaSearchRepositoryImpl
 import fr.cklla.pellicule.data.repository.SynopsisRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvDetailsRepositoryImpl
-import fr.cklla.pellicule.data.repository.TvShowInfoRepositoryImpl
 import fr.cklla.pellicule.data.repository.WatchProvidersRepositoryImpl
 import fr.cklla.pellicule.domain.repository.AuthRepository
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
@@ -24,7 +23,6 @@ import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.repository.MediaSearchRepository
 import fr.cklla.pellicule.domain.repository.SynopsisRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
-import fr.cklla.pellicule.domain.repository.TvShowInfoRepository
 import fr.cklla.pellicule.domain.repository.WatchProvidersRepository
 import javax.inject.Singleton
 
@@ -49,10 +47,6 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTvDetailsRepository(impl: TvDetailsRepositoryImpl): TvDetailsRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindTvShowInfoRepository(impl: TvShowInfoRepositoryImpl): TvShowInfoRepository
 
     @Binds
     @Singleton

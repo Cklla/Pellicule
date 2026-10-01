@@ -15,8 +15,6 @@ class FakeEpisodeDao : EpisodeDao {
     override fun observeWatched(mediaId: String): Flow<List<WatchedEpisodeEntity>> =
         watched.map { list -> list.filter { it.mediaId == mediaId } }
 
-    override fun observeAllWatched(): Flow<List<WatchedEpisodeEntity>> = watched
-
     override suspend fun markWatched(episode: WatchedEpisodeEntity) {
         watched.update { list -> if (list.contains(episode)) list else list + episode }
     }
