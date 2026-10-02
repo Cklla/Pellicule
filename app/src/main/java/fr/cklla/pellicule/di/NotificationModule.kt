@@ -5,7 +5,11 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import fr.cklla.pellicule.domain.notification.EpisodeNotifier
+import fr.cklla.pellicule.domain.notification.RecapNotificationStore
+import fr.cklla.pellicule.domain.notification.RecapNotifier
 import fr.cklla.pellicule.notification.EpisodeNotificationNotifier
+import fr.cklla.pellicule.notification.RecapNotificationNotifier
+import fr.cklla.pellicule.notification.RecapNotificationPrefs
 import javax.inject.Singleton
 
 @Module
@@ -15,4 +19,12 @@ abstract class NotificationModule {
     @Binds
     @Singleton
     abstract fun bindEpisodeNotifier(impl: EpisodeNotificationNotifier): EpisodeNotifier
+
+    @Binds
+    @Singleton
+    abstract fun bindRecapNotifier(impl: RecapNotificationNotifier): RecapNotifier
+
+    @Binds
+    @Singleton
+    abstract fun bindRecapNotificationStore(impl: RecapNotificationPrefs): RecapNotificationStore
 }

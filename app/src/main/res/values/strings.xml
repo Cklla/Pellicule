@@ -128,4 +128,34 @@
     <string name="notification_channel_new_episodes_description">Prévient le jour où sort un nouvel épisode d\'une série ou d\'un anime suivi.</string>
     <string name="notification_new_episode_title">Nouvel épisode</string>
     <string name="notification_new_episode_text">%1$s : l\'épisode %2$d sort aujourd\'hui</string>
+
+    <!-- Statistiques -->
+    <string name="compte_stats_action">Statistiques</string>
+    <string name="compte_stats_subtitle">Tes visionnages par année et par type</string>
+    <string name="stats_back">Retour au compte</string>
+    <string name="stats_kicker">tes visionnages</string>
+    <string name="stats_title">Statistiques</string>
+    <string name="stats_donut_label">vus</string>
+
+    <!-- Récap annuel -->
+    <string name="compte_recap_kicker">bilan de l\'année</string>
+    <string name="compte_recap_title">Récap %1$d</string>
+    <plurals name="compte_recap_subtitle">
+        <item quantity="one">%1$d contenu vu</item>
+        <item quantity="other">%1$d contenus vus</item>
+    </plurals>
+    <string name="recap_back">Retour au compte</string>
+    <string name="recap_kicker">bilan de l\'année</string>
+    <string name="recap_title">Récap %1$d</string>
+    <string name="recap_total_label">contenus vus</string>
+    <string name="recap_media_back">Retour au récap</string>
+    <string name="recap_media_title_all">Vus en %1$d</string>
+    <string name="recap_media_title_film">Films vus en %1$d</string>
+    <string name="recap_media_title_serie">Séries vues en %1$d</string>
+    <string name="recap_media_title_anime">Animes vus en %1$d</string>
+    <string name="recap_media_empty">Aucun contenu à afficher.</string>
+    <string name="notification_channel_recap_name">Récap annuel</string>
+    <string name="notification_channel_recap_description">Prévient quand le bilan de l\'année devient disponible.</string>
+    <string name="notification_recap_title">Ton récap %1$d est prêt</string>
+    <string name="notification_recap_text">Découvre le bilan de tes visionnages de l\'année.</string>
 </resources>

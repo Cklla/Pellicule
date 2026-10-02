@@ -6,6 +6,9 @@ import android.content.Intent
 enum class NotificationDestinationType {
     /** Fiche Détail d'un contenu suivi ; l'identifiant est celui du contenu. */
     DETAIL,
+
+    /** Récap annuel ; l'identifiant est l'année sur quatre chiffres. */
+    RECAP,
 }
 
 /**

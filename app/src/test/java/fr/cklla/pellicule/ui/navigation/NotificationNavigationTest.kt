@@ -21,4 +21,16 @@ class NotificationNavigationTest {
         assertNull(NotificationDestination(NotificationDestinationType.DETAIL, "").toRoute())
         assertNull(NotificationDestination(NotificationDestinationType.DETAIL, "a b").toRoute())
     }
+
+    @Test
+    fun `la destination Recap ouvre le recap de l'annee`() {
+        assertEquals("recap/2026", NotificationDestination(NotificationDestinationType.RECAP, "2026").toRoute())
+    }
+
+    @Test
+    fun `une annee invalide ne produit aucune route de recap`() {
+        assertNull(NotificationDestination(NotificationDestinationType.RECAP, "20x6").toRoute())
+        assertNull(NotificationDestination(NotificationDestinationType.RECAP, "202").toRoute())
+        assertNull(NotificationDestination(NotificationDestinationType.RECAP, "2026/../compte").toRoute())
+    }
 }

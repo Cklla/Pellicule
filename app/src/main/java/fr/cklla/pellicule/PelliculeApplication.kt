@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import dagger.hilt.android.HiltAndroidApp
 import fr.cklla.pellicule.notification.EpisodeReminderWorker
 import fr.cklla.pellicule.notification.REMINDER_CHECK_HOUR
+import fr.cklla.pellicule.notification.RecapNotificationWorker
 import fr.cklla.pellicule.notification.createNotificationChannels
 import fr.cklla.pellicule.notification.delayUntilNextHour
 import java.util.concurrent.TimeUnit
@@ -43,10 +44,20 @@ class PelliculeApplication : Application(), Configuration.Provider {
         // local à la première planification (WorkManager peut décaler l'exécution selon
         // l'économie d'énergie). `KEEP` : relancer l'app ne doit ni réinitialiser le cycle ni
         // décaler le job déjà planifié. Sans rappel actif, le job ne fait rien.
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+        val workManager = WorkManager.getInstance(this)
+        workManager.enqueueUniquePeriodicWork(
             EpisodeReminderWorker.UNIQUE_WORK_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<EpisodeReminderWorker>(1, TimeUnit.DAYS)
+                .setInitialDelay(delayUntilNextHour(System.currentTimeMillis(), REMINDER_CHECK_HOUR), TimeUnit.MILLISECONDS)
+                .build(),
+        )
+        // Même cadence pour la notification du récap annuel : le job ne fait rien hors de la
+        // fenêtre du récap, et une fois l'année notifiée.
+        workManager.enqueueUniquePeriodicWork(
+            RecapNotificationWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<RecapNotificationWorker>(1, TimeUnit.DAYS)
                 .setInitialDelay(delayUntilNextHour(System.currentTimeMillis(), REMINDER_CHECK_HOUR), TimeUnit.MILLISECONDS)
                 .build(),
         )

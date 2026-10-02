@@ -2,6 +2,7 @@ package fr.cklla.pellicule.ui.navigation
 
 import android.net.Uri
 import fr.cklla.pellicule.domain.model.MediaSearchResult
+import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.ui.AppTab
 
 /**
@@ -16,6 +17,19 @@ object PelliculeDestinations {
     const val RECHERCHE = "recherche"
     const val COMPTE = "compte"
     const val JELLYFIN_SETTINGS = "jellyfin-settings"
+    const val STATISTIQUES = "statistiques"
+
+    // Récap annuel : l'année est portée par la route, et la liste des contenus vus sous-route de
+    // l'écran du récap. Le type vaut `RECAP_MEDIA_TYPE_ALL` pour tous les types, sinon un nom de MediaType.
+    const val RECAP_ARG_YEAR = "year"
+    const val RECAP_ARG_TYPE = "type"
+    const val RECAP_MEDIA_TYPE_ALL = "TOUS"
+    const val RECAP = "recap/{$RECAP_ARG_YEAR}"
+    const val RECAP_MEDIA = "recap/{$RECAP_ARG_YEAR}/media/{$RECAP_ARG_TYPE}"
+
+    fun recapRoute(year: Int) = "recap/$year"
+
+    fun recapMediaRoute(year: Int, type: MediaType?) = "recap/$year/media/${type?.name ?: RECAP_MEDIA_TYPE_ALL}"
 
     const val DETAIL_ARG_MEDIA_ID = "mediaId"
     const val DETAIL = "detail/{$DETAIL_ARG_MEDIA_ID}"

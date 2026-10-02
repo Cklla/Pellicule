@@ -40,7 +40,11 @@ import fr.cklla.pellicule.ui.login.LoginScreen
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import fr.cklla.pellicule.ui.navigation.route
 import fr.cklla.pellicule.ui.navigation.toRoute
+import fr.cklla.pellicule.ui.permission.RequestNotificationPermissionOnce
 import fr.cklla.pellicule.ui.recherche.RechercheScreen
+import fr.cklla.pellicule.ui.stats.RecapMediaScreen
+import fr.cklla.pellicule.ui.stats.RecapScreen
+import fr.cklla.pellicule.ui.stats.StatsScreen
 import fr.cklla.pellicule.ui.sync.AppSyncViewModel
 import fr.cklla.pellicule.ui.theme.BackgroundDark
 import fr.cklla.pellicule.ui.theme.PelliculeTheme
@@ -104,6 +108,10 @@ fun PelliculeApp(
         LoginScreen()
         return
     }
+
+    // Une seule fois après la connexion, jamais à un moment arbitraire : le contrôle quotidien du
+    // récap ne notifie pas sans cette permission, mais rien d'autre n'en dépend.
+    RequestNotificationPermissionOnce()
 
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
@@ -173,6 +181,34 @@ fun PelliculeApp(
             composable(PelliculeDestinations.COMPTE) {
                 CompteScreen(
                     onJellyfinSettingsClick = { navController.navigate(PelliculeDestinations.JELLYFIN_SETTINGS) },
+                    onStatsClick = { navController.navigate(PelliculeDestinations.STATISTIQUES) },
+                    onRecapClick = { year -> navController.navigate(PelliculeDestinations.recapRoute(year)) },
+                )
+            }
+            composable(PelliculeDestinations.STATISTIQUES) {
+                StatsScreen(onBackClick = { navController.popBackStack() })
+            }
+            composable(
+                route = PelliculeDestinations.RECAP,
+                arguments = listOf(navArgument(PelliculeDestinations.RECAP_ARG_YEAR) { type = NavType.IntType }),
+            ) {
+                RecapScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onMediaListClick = { year, type ->
+                        navController.navigate(PelliculeDestinations.recapMediaRoute(year, type))
+                    },
+                )
+            }
+            composable(
+                route = PelliculeDestinations.RECAP_MEDIA,
+                arguments = listOf(
+                    navArgument(PelliculeDestinations.RECAP_ARG_YEAR) { type = NavType.IntType },
+                    navArgument(PelliculeDestinations.RECAP_ARG_TYPE) { type = NavType.StringType },
+                ),
+            ) {
+                RecapMediaScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onMediaClick = { mediaId -> navController.navigate(PelliculeDestinations.detailRoute(mediaId)) },
                 )
             }
             composable(PelliculeDestinations.JELLYFIN_SETTINGS) {
