@@ -22,6 +22,7 @@
     <string name="next_episode_upcoming_dated">Prochain épisode le %1$s</string>
     <string name="next_episode_upcoming_undated">Prochain épisode à venir</string>
     <string name="next_episode_up_to_date">À jour</string>
+    <string name="next_episode_watched_snackbar">S%1$d:E%2$d vu !</string>
 
     <!-- Types de contenu -->
     <string name="media_type_film">Film</string>

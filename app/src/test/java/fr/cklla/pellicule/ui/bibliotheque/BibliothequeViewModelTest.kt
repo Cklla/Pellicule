@@ -309,6 +309,47 @@ class BibliothequeViewModelTest {
     }
 
     @Test
+    fun `chaque plus un annonce l'episode tout juste marque vu`() = runTest {
+        tvShowRepository.put(show(status = TvShowStatus.EN_DIFFUSION, counts = mapOf(1 to 2, 2 to 2)))
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val id = repository.addSeries()
+
+        val viewModel = viewModelFor(repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        val announced = mutableListOf<EpisodeKey>()
+        val eventsJob = launch { viewModel.episodeWatchedEvents.collect { announced += it } }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        repeat(3) {
+            viewModel.onWatchNextEpisode(id)
+            dispatcher.scheduler.advanceUntilIdle()
+        }
+
+        assertEquals(listOf(EpisodeKey(1, 1), EpisodeKey(1, 2), EpisodeKey(2, 1)), announced)
+        eventsJob.cancel()
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `un plus un sans episode a marquer n'annonce rien`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val id = repository.addSeries()
+
+        val viewModel = viewModelFor(repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        val announced = mutableListOf<EpisodeKey>()
+        val eventsJob = launch { viewModel.episodeWatchedEvents.collect { announced += it } }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onWatchNextEpisode(id)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(announced.isEmpty())
+        eventsJob.cancel()
+        collectorJob.cancel()
+    }
+
+    @Test
     fun `des plus un lances coup sur coup sans attendre ne marquent jamais deux fois le meme episode`() = runTest {
         tvShowRepository.put(show(status = TvShowStatus.EN_DIFFUSION, counts = mapOf(1 to 5)))
         val repository = fakeMediaRepository(FakeMediaDao())
