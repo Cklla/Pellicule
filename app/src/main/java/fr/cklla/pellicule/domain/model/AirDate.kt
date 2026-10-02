@@ -34,6 +34,12 @@ value class AirDate private constructor(val iso: String) : Comparable<AirDate> {
         return SimpleDateFormat("EEEE d MMMM", locale).apply { this.timeZone = timeZone }.format(parsed)
     }
 
+    /** Mois et année (ex. « octobre 2026 »), d'après le [locale] fourni. */
+    fun formatMonthYear(locale: Locale, timeZone: TimeZone = TimeZone.getDefault()): String {
+        val parsed = SimpleDateFormat(PATTERN, Locale.ROOT).apply { this.timeZone = timeZone }.parse(iso) ?: return iso
+        return SimpleDateFormat("LLLL yyyy", locale).apply { this.timeZone = timeZone }.format(parsed)
+    }
+
     companion object {
         private const val PATTERN = "yyyy-MM-dd"
         private val ISO_DATE = Regex("""\d{4}-\d{2}-\d{2}""")

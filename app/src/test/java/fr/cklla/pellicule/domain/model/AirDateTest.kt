@@ -53,4 +53,11 @@ class AirDateTest {
 
         assertEquals("jeudi 8 octobre", formatted)
     }
+
+    @Test
+    fun `formatMonthYear affiche le mois en toutes lettres et l'annee`() {
+        val formatted = AirDate.parse("2026-10-08")!!.formatMonthYear(Locale.FRENCH, TimeZone.getTimeZone("UTC"))
+
+        assertEquals("octobre 2026", formatted)
+    }
 }

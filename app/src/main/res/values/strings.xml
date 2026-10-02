@@ -66,7 +66,8 @@
     <string name="detail_next_airing_label">Prochaine diffusion</string>
     <string name="detail_next_airing_line">É%1$d · %2$s</string>
     <string name="detail_next_airing_line_season">S%1$d · É%2$d · %3$s</string>
-    <string name="detail_next_airing_disclaimer">Date de diffusion dans le pays d\'origine : selon le fuseau horaire, elle peut tomber un jour plus tôt ou plus tard en France.</string>
+    <string name="detail_next_airing_disclaimer">Date indicative : selon le pays de diffusion, elle peut différer d\'un jour en France.</string>
+    <string name="detail_calendar_weekday_initials">LMMJVSD</string>
     <string name="detail_reminder_label">Me prévenir à la sortie de chaque épisode</string>
     <string name="detail_reminder_denied">Notifications refusées : le rappel reste désactivé.</string>
     <string name="detail_episodes_label">Épisodes</string>

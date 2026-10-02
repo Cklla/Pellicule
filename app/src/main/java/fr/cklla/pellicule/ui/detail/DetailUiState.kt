@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.ui.detail
 
+import fr.cklla.pellicule.domain.calendar.NextAiring
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.Season
 import fr.cklla.pellicule.domain.model.WatchAvailability
@@ -11,6 +12,13 @@ data class DetailUiState(
     val synopsis: String? = null,
     /** Plateformes de streaming françaises ; `null` tant que la réponse TMDB n'est pas arrivée. */
     val watchAvailability: WatchAvailability? = null,
+    /**
+     * Prochaine diffusion d'une série/anime encore en cours, `null` si terminée, si TMDB n'annonce
+     * aucune date ou pour un film : la section « Prochaine diffusion » n'est alors pas affichée.
+     */
+    val nextAiring: NextAiring? = null,
+    /** Rappel « me prévenir à chaque sortie » actif pour ce contenu (toujours faux avant son ajout au suivi). */
+    val reminderEnabled: Boolean = false,
     /** Saisons disponibles pour une série/anime ; toujours vide pour un FILM. */
     val seasons: List<Season> = emptyList(),
     val selectedSeasonNumber: Int? = null,
