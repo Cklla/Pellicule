@@ -84,6 +84,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        // java.time (dates de visionnage, récap annuel) n'existe nativement qu'à partir de l'API 26,
+        // alors que l'app vise l'API 24.
+        isCoreLibraryDesugaringEnabled = true
     }
     buildFeatures {
         compose = true
@@ -150,6 +153,7 @@ dependencies {
     // Firebase : Firestore (source de vérité distante du suivi) + Auth (identifie l'utilisateur,
     // nécessaire aux règles de sécurité Firestore). Le BoM aligne les versions des différents
     // modules Firebase entre eux, pas besoin de préciser de version sur chacun.
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)

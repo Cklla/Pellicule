@@ -31,3 +31,9 @@ val CoverGradients: List<Pair<Color, Color>> = listOf(
     Color(0xFF6B4FA8) to Color(0xFF1C1638),
     Color(0xFF432E75) to Color(0xFF0A0812),
 )
+
+// Couleurs de type de contenu (anneau de répartition des Statistiques). Distinctes des couleurs de
+// statut pour ne jamais se confondre avec le vert « Vu » ou le corail d'erreur.
+val TypeFilm = AccentPurple
+val TypeSerie = Color(0xFF4FC3D9)
+val TypeAnime = Color(0xFFF2B35E)

@@ -128,4 +128,37 @@ object PelliculeTextStyles {
         fontFamily = InterFamily,
         fontSize = 12.5.sp,
     )
+
+    // --- Statistiques ---
+
+    val statValueMedium = TextStyle(
+        fontFamily = FrauncesItalic,
+        fontWeight = FontWeight.SemiBold,
+        fontStyle = FontStyle.Italic,
+        fontSize = 22.sp,
+    )
+
+    val donutValue = TextStyle(
+        fontFamily = FrauncesItalic,
+        fontWeight = FontWeight.SemiBold,
+        fontStyle = FontStyle.Italic,
+        fontSize = 26.sp,
+    )
+
+    val donutLabel = TextStyle(
+        fontFamily = InterFamily,
+        fontSize = 10.5.sp,
+        letterSpacing = 0.42.sp,
+    )
+
+    val legendLabel = TextStyle(
+        fontFamily = InterFamily,
+        fontSize = 13.sp,
+    )
+
+    val legendCount = TextStyle(
+        fontFamily = InterFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp,
+    )
 }

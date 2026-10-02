@@ -22,6 +22,12 @@ enum class AppNotificationChannel(
         descriptionRes = R.string.notification_channel_new_episodes_description,
         importance = NotificationManagerCompat.IMPORTANCE_DEFAULT,
     ),
+    ANNUAL_RECAP(
+        id = "recap_annuel",
+        nameRes = R.string.notification_channel_recap_name,
+        descriptionRes = R.string.notification_channel_recap_description,
+        importance = NotificationManagerCompat.IMPORTANCE_DEFAULT,
+    ),
 }
 
 /**

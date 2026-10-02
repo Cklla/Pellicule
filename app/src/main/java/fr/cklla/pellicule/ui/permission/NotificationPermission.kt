@@ -6,9 +6,11 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.edit
 
 /**
  * Vrai si l'app peut afficher des notifications : permission `POST_NOTIFICATIONS` accordée
@@ -60,6 +62,27 @@ fun rememberNotificationPermissionRequester(): NotificationPermissionRequester {
         )
     }
 }
+
+/**
+ * Demande la permission de notification une seule fois pour toute la vie de l'installation, à
+ * l'arrivée dans l'app connectée. Le refus ne bloque rien : la notification du récap ne part
+ * simplement pas, la carte du récap reste disponible. Une demande ultérieure reste possible, à
+ * l'activation d'un rappel d'épisode.
+ */
+@Composable
+fun RequestNotificationPermissionOnce() {
+    val context = LocalContext.current
+    val requester = rememberNotificationPermissionRequester()
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences(PERMISSION_PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_PERMISSION_ASKED, false)) return@LaunchedEffect
+        prefs.edit { putBoolean(KEY_PERMISSION_ASKED, true) }
+        requester.request { }
+    }
+}
+
+private const val PERMISSION_PREFS_NAME = "notification_permission"
+private const val KEY_PERMISSION_ASKED = "asked"
 
 private class PendingResult {
     var callback: ((Boolean) -> Unit)? = null
