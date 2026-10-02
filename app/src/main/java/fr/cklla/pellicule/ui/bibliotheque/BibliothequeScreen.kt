@@ -19,13 +19,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,10 +57,12 @@ import fr.cklla.pellicule.ui.theme.BackgroundDark
 import fr.cklla.pellicule.ui.theme.BorderHairline
 import fr.cklla.pellicule.ui.theme.PelliculeTextStyles
 import fr.cklla.pellicule.ui.theme.PelliculeTheme
+import fr.cklla.pellicule.ui.theme.SurfaceCard
 import fr.cklla.pellicule.ui.theme.TextMuted
 import fr.cklla.pellicule.ui.theme.TextPrimary
 import fr.cklla.pellicule.ui.theme.TextSecondary
 import fr.cklla.pellicule.ui.theme.TextTertiary
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun BibliothequeScreen(
@@ -63,15 +71,38 @@ fun BibliothequeScreen(
     viewModel: BibliothequeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    BibliothequeContent(
-        uiState = uiState,
-        onFilterSelected = viewModel::onFilterSelected,
-        onWatchedYearSelected = viewModel::onWatchedYearSelected,
-        onTypeSelected = viewModel::onTypeSelected,
-        onMediaClick = onMediaClick,
-        onWatchNextEpisode = viewModel::onWatchNextEpisode,
-        modifier = modifier,
-    )
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    // collectLatest : un "+1" enchaîné remplace le bandeau en cours au lieu de s'empiler derrière.
+    LaunchedEffect(viewModel, snackbarHostState) {
+        viewModel.episodeWatchedEvents.collectLatest { episode ->
+            snackbarHostState.showSnackbar(
+                context.getString(R.string.next_episode_watched_snackbar, episode.seasonNumber, episode.episodeNumber),
+            )
+        }
+    }
+    Box(modifier = modifier) {
+        BibliothequeContent(
+            uiState = uiState,
+            onFilterSelected = viewModel::onFilterSelected,
+            onWatchedYearSelected = viewModel::onWatchedYearSelected,
+            onTypeSelected = viewModel::onTypeSelected,
+            onMediaClick = onMediaClick,
+            onWatchNextEpisode = viewModel::onWatchNextEpisode,
+        )
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) { data ->
+            Snackbar(
+                snackbarData = data,
+                containerColor = SurfaceCard,
+                contentColor = TextPrimary,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.border(BorderStroke(0.5.dp, BorderHairline), RoundedCornerShape(12.dp)),
+            )
+        }
+    }
 }
 
 @Composable

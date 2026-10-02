@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import fr.cklla.pellicule.domain.computeNextEpisode
 import fr.cklla.pellicule.domain.model.AirDate
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.NextEpisode
@@ -15,6 +16,7 @@ import fr.cklla.pellicule.domain.repository.TvShowInfoRepository
 import fr.cklla.pellicule.domain.usecase.SetEpisodeWatchedUseCase
 import fr.cklla.pellicule.domain.util.TimeSource
 import javax.inject.Inject
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -43,6 +46,11 @@ class BibliothequeViewModel @Inject constructor(
     // Un "+1" par contenu à la fois : le suivant se calcule sur l'état que le précédent vient
     // d'écrire, deux écritures concurrentes viseraient le même épisode.
     private val pendingMediaIds = mutableSetOf<String>()
+
+    private val episodeWatchedChannel = Channel<EpisodeKey>(Channel.BUFFERED)
+
+    /** Un élément par "+1" abouti, à l'épisode tout juste marqué vu : alimente le bandeau de confirmation. */
+    val episodeWatchedEvents: Flow<EpisodeKey> = episodeWatchedChannel.receiveAsFlow()
 
     private val nextEpisodes: Flow<Map<String, NextEpisode>> = combine(
         mediaRepository.observeMedia(),
@@ -146,7 +154,11 @@ class BibliothequeViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val next = currentNextEpisode(mediaId) as? NextEpisode.Available ?: return@launch
-                setEpisodeWatched(mediaId, next.key, watched = true)
+                // Annoncé dès l'écriture locale faite, sans attendre la poussée Jellyfin qui peut
+                // être lente ou échouer sans que le +1 en soit moins pris en compte.
+                setEpisodeWatched(mediaId, next.key, watched = true, onLocalChange = {
+                    episodeWatchedChannel.trySend(next.key)
+                })
             } finally {
                 pendingMediaIds.remove(mediaId)
             }
