@@ -94,3 +94,21 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         )
     }
 }
+
+/**
+ * Rappels de sortie d'épisodes, propres à l'appareil. Nouvelle table liée à `media` avec
+ * suppression en cascade : migration purement additive, aucune donnée existante n'est touchée.
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `episode_reminder` (" +
+                "`mediaId` TEXT NOT NULL, " +
+                "`enabled` INTEGER NOT NULL, " +
+                "`lastNotifiedSeason` INTEGER, " +
+                "`lastNotifiedEpisode` INTEGER, " +
+                "PRIMARY KEY(`mediaId`), " +
+                "FOREIGN KEY(`mediaId`) REFERENCES `media`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+        )
+    }
+}
