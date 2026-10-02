@@ -35,6 +35,13 @@ optionnelle avec un serveur Jellyfin.
   diffusé affiche sa date de sortie à la place. Cocher le premier épisode passe un contenu À voir
   en En cours ; atteindre le dernier épisode d'une série terminée le passe en Vu. Fonctionne hors
   ligne.
+- **Calendrier de diffusion et rappels** : sur la fiche d'une série ou d'un anime encore en cours de
+  diffusion, une section « Prochaine diffusion » affiche un mini-calendrier du mois de la sortie, avec
+  le jour mis en évidence (« É5 · jeudi 8 octobre »). Un interrupteur optionnel, éteint par défaut,
+  envoie une notification locale le jour de la sortie de chaque épisode (vers 9 h) ; un tap ouvre la
+  fiche. La permission de notification n'est demandée qu'à la première activation, et refusée elle
+  n'empêche pas le calendrier. TMDB ne fournit qu'une date, dans le fuseau du pays d'origine : pour un
+  anime elle peut différer d'un jour en France.
 - **Recherche** : recherche multi-type via l'[API TMDB](https://www.themoviedb.org/documentation/api)
   (titre, affiche, année), aperçu de la fiche avant ajout, ajout en un tap au suivi. Fiches en
   français en priorité, avec fallback sur l'anglais quand la traduction française manque.
@@ -61,9 +68,9 @@ optionnelle avec un serveur Jellyfin.
 |:---:|:---:|:---:|
 | ![Connexion](screenshots/login.png) | ![Bibliothèque](screenshots/bibliotheque.png) | ![Recherche](screenshots/recherche.png) |
 
-| Détail | Compte |
-|:---:|:---:|
-| ![Détail](screenshots/detail.png) | ![Compte](screenshots/compte.png) |
+| Détail | Compte | Calendrier |
+|:---:|:---:|:---:|
+| ![Détail](screenshots/detail.png) | ![Compte](screenshots/compte.png) | ![Calendrier](screenshots/calendrier.png) |
 
 ## Stack technique
 
@@ -75,6 +82,7 @@ optionnelle avec un serveur Jellyfin.
 | Persistance locale | Room 2.8 |
 | Réseau | Retrofit 3 + Moshi (TMDB, Jellyfin) |
 | Injection de dépendances | Hilt |
+| Tâches en arrière-plan | WorkManager (contrôle quotidien des rappels de sortie d'épisodes, via `hilt-work`) |
 | Cloud | Firebase Firestore (données) + Firebase Auth (Google Sign-In) |
 | Chargement d'images | Coil |
 | Tests | JUnit4 + kotlinx-coroutines-test, tests unitaires basés sur des fakes (pas de mock ni Robolectric) |
@@ -258,7 +266,9 @@ app/src/main/java/fr/cklla/pellicule/
 │   │   └── jellyfin/   # Client Jellyfin (auth, statut vu, DTO)
 │   └── repository/     # Implémentations concrètes des repositories
 ├── di/                  # Modules Hilt
+├── notification/        # Canaux, destination d'ouverture, Worker et notification des rappels
 ├── domain/
+│   ├── calendar/        # Grille du calendrier mensuel et règles de rappel (fonctions pures)
 │   ├── model/           # Modèles métier (Media, WatchStatus, Resource, AuthUser…)
 │   ├── repository/      # Interfaces de repository
 │   └── usecase/         # Cas d'usage partagés (cocher un épisode)
@@ -271,6 +281,7 @@ app/src/main/java/fr/cklla/pellicule/
     ├── jellyfin/         # Écran de connexion à un serveur Jellyfin
     ├── sync/              # Synchro Jellyfin déclenchée à la reprise de l'app
     ├── navigation/         # Routes Navigation Compose
+    ├── permission/         # Demande réutilisable de la permission de notification
     └── theme/              # Thème Compose (couleurs, typographie)
 ```
 
@@ -286,6 +297,10 @@ app/src/main/java/fr/cklla/pellicule/
 - **Connexion Google obligatoire** dès le lancement : simplifie les règles de sécurité Firestore
   (un utilisateur = un espace de données) sans avoir à gérer de mot de passe dédié — indépendant de
   la connexion Jellyfin, qui reste elle entièrement optionnelle.
+- **Rappels de sortie locaux, sans serveur de notifications** : un job WorkManager quotidien décide
+  d'après la date de l'appareil et les dates TMDB en cache ; pas de Firebase Cloud Messaging. Les
+  rappels vivent uniquement dans Room (propres à l'appareil, jamais synchronisés), et une seule
+  notification part par épisode.
 - **La synchro Jellyfin ne peut que faire progresser le suivi** : le pull ajoute les épisodes vus du
   serveur sans jamais dévoir ce qui l'est déjà localement, ni faire régresser un statut — un serveur
   réinstallé sans son historique ne peut pas effacer le suivi. Les retours en arrière se font depuis
