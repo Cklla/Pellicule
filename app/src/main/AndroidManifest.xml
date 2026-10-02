@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Rappels de sortie d'épisodes (Android 13+ uniquement, sans effet avant) : demandée au moment
+         où l'utilisateur active son premier rappel, jamais au lancement. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".PelliculeApplication"
@@ -17,6 +20,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.Pellicule"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -25,6 +29,27 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            Désactive l'initialisation automatique de WorkManager (ContentProvider exécuté avant
+            même Application.onCreate) : sans ça, WorkManager s'initialise avec sa configuration par
+            défaut avant que PelliculeApplication ait pu lui fournir HiltWorkerFactory, et
+            EpisodeReminderWorker échoue systématiquement et en silence (NoSuchMethodException : son
+            constructeur généré par Hilt n'a pas la signature (Context, WorkerParameters) attendue
+            par la fabrique par réflexion par défaut). Ainsi désactivé, WorkManager s'initialise à la
+            demande au premier WorkManager.getInstance() et respecte alors
+            PelliculeApplication.workManagerConfiguration.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>

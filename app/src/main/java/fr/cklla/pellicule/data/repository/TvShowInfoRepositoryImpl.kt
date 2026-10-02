@@ -4,6 +4,7 @@ import fr.cklla.pellicule.BuildConfig
 import fr.cklla.pellicule.data.local.TvShowCacheDao
 import fr.cklla.pellicule.data.remote.TmdbApi
 import fr.cklla.pellicule.di.ApplicationScope
+import fr.cklla.pellicule.domain.model.AirDate
 import fr.cklla.pellicule.domain.model.TvShowInfo
 import fr.cklla.pellicule.domain.model.TvShowStatus
 import fr.cklla.pellicule.domain.repository.AuthRepository
@@ -58,11 +59,31 @@ class TvShowInfoRepositoryImpl @Inject constructor(
     override suspend fun refreshIfStale(tmdbId: Long) {
         val cached = dao.getShow(tmdbId)
         if (cached != null && !isStale(cached.fetchedAt, TvShowStatus.fromTmdb(cached.tmdbStatus))) return
+        fetchAndStore(tmdbId)
+    }
+
+    override suspend fun refreshOncePerDay(tmdbId: Long) {
+        val cached = dao.getShow(tmdbId)
+        if (cached != null) {
+            val status = TvShowStatus.fromTmdb(cached.tmdbStatus)
+            val upToDate = if (status.isFinished) !isStale(cached.fetchedAt, status) else isFetchedToday(cached.fetchedAt)
+            if (upToDate) return
+        }
+        fetchAndStore(tmdbId)
+    }
+
+    private suspend fun fetchAndStore(tmdbId: Long) {
         val details = fetch { tmdbApi.getTvDetails(tvId = tmdbId, apiKey = BuildConfig.TMDB_API_KEY) } ?: return
         dao.replaceShow(
             show = details.toShowEntity(tmdbId, fetchedAt = timeSource.nowMillis()),
             seasons = details.toSeasonEntities(tmdbId),
         )
+    }
+
+    // Même jour calendaire que maintenant ; un horodatage dans le futur ne compte pas (voir isStale).
+    private fun isFetchedToday(fetchedAt: Long): Boolean {
+        val now = timeSource.nowMillis()
+        return fetchedAt <= now && AirDate.fromMillis(fetchedAt) == AirDate.fromMillis(now)
     }
 
     override suspend fun refreshEpisodesIfStale(tmdbId: Long, seasonNumber: Int) {

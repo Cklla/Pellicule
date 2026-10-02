@@ -11,6 +11,7 @@ class FakeTvShowInfoRepository(initial: List<TvShowInfo> = emptyList()) : TvShow
     private val shows = MutableStateFlow(initial.associateBy { it.tmdbId })
 
     val refreshedShows = mutableListOf<Long>()
+    val dailyRefreshedShows = mutableListOf<Long>()
     val refreshedSeasons = mutableListOf<Pair<Long, Int>>()
 
     fun put(show: TvShowInfo) {
@@ -23,6 +24,10 @@ class FakeTvShowInfoRepository(initial: List<TvShowInfo> = emptyList()) : TvShow
 
     override suspend fun refreshIfStale(tmdbId: Long) {
         refreshedShows.add(tmdbId)
+    }
+
+    override suspend fun refreshOncePerDay(tmdbId: Long) {
+        dailyRefreshedShows.add(tmdbId)
     }
 
     override suspend fun refreshEpisodesIfStale(tmdbId: Long, seasonNumber: Int) {

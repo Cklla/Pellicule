@@ -4,6 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fr.cklla.pellicule.domain.calendar.NextAiring
+import fr.cklla.pellicule.domain.calendar.upcomingAiring
+import fr.cklla.pellicule.domain.model.AirDate
 import fr.cklla.pellicule.domain.model.EpisodeInfo
 import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
@@ -14,13 +17,16 @@ import fr.cklla.pellicule.domain.model.Season
 import fr.cklla.pellicule.domain.model.WatchAvailability
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.model.toMedia
+import fr.cklla.pellicule.domain.repository.EpisodeReminderRepository
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.repository.SynopsisRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
+import fr.cklla.pellicule.domain.repository.TvShowInfoRepository
 import fr.cklla.pellicule.domain.repository.WatchProvidersRepository
 import fr.cklla.pellicule.domain.usecase.SetEpisodeWatchedUseCase
+import fr.cklla.pellicule.domain.util.TimeSource
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,6 +72,9 @@ class DetailViewModel @Inject constructor(
     private val synopsisRepository: SynopsisRepository,
     private val watchProvidersRepository: WatchProvidersRepository,
     private val setEpisodeWatched: SetEpisodeWatchedUseCase,
+    private val tvShowInfoRepository: TvShowInfoRepository,
+    private val reminderRepository: EpisodeReminderRepository,
+    private val timeSource: TimeSource,
 ) : ViewModel() {
 
     private val mediaId: String? = savedStateHandle[PelliculeDestinations.DETAIL_ARG_MEDIA_ID]
@@ -75,6 +84,7 @@ class DetailViewModel @Inject constructor(
     private val isLoading = MutableStateFlow(mediaId != null)
     private val synopsis = MutableStateFlow<String?>(null)
     private val watchAvailability = MutableStateFlow<WatchAvailability?>(null)
+    private val nextAiring = MutableStateFlow<NextAiring?>(null)
 
     private val seasons = MutableStateFlow<List<Season>>(emptyList())
     private val selectedSeasonNumber = MutableStateFlow<Int?>(null)
@@ -92,12 +102,14 @@ class DetailViewModel @Inject constructor(
                 media?.let {
                     fetchSynopsis(it)
                     fetchWatchAvailability(it)
+                    observeNextAiring(it)
                 }
             }
         } else {
             workingMedia.value?.let {
                 fetchSynopsis(it)
                 fetchWatchAvailability(it)
+                observeNextAiring(it)
             }
         }
 
@@ -153,6 +165,28 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Prochaine diffusion d'une série/anime, lue dans le cache local des séries (rafraîchi s'il est
+     * périmé, voir [TvShowInfoRepository]) : visible dès l'aperçu, comme le synopsis. La date du jour
+     * est relue à chaque émission du cache et non figée à l'ouverture de la fiche.
+     */
+    private fun observeNextAiring(media: Media) {
+        val tmdbId = media.tmdbId ?: return
+        if (media.type == MediaType.FILM) return
+        viewModelScope.launch { tvShowInfoRepository.refreshIfStale(tmdbId) }
+        viewModelScope.launch {
+            tvShowInfoRepository.observeShows()
+                .map { shows -> upcomingAiring(AirDate.fromMillis(timeSource.nowMillis()), shows[tmdbId]) }
+                .distinctUntilChanged()
+                .collect { nextAiring.value = it }
+        }
+    }
+
+    private val reminderEnabled = workingMedia
+        .map { it?.id }
+        .distinctUntilChanged()
+        .flatMapLatest { id -> if (id.isNullOrEmpty()) flowOf(false) else reminderRepository.observeEnabled(id) }
+
     private data class EpisodesSectionState(
         val episodes: List<EpisodeUiModel> = emptyList(),
         val isLoading: Boolean = false,
@@ -184,15 +218,20 @@ class DetailViewModel @Inject constructor(
         )
     }
 
+    private data class AiringSectionState(val nextAiring: NextAiring? = null, val reminderEnabled: Boolean = false)
+
+    private val airingSection = combine(nextAiring, reminderEnabled, ::AiringSectionState)
+
     private data class MediaSectionState(
         val media: Media? = null,
         val synopsis: String? = null,
         val watchAvailability: WatchAvailability? = null,
+        val airing: AiringSectionState = AiringSectionState(),
     )
 
     // `combine` n'a pas d'overload à 7 flux typés : tout ce qui décrit le contenu lui-même est
     // regroupé en amont pour rester dans la limite des 5 arguments du `combine` final.
-    private val mediaSection = combine(workingMedia, synopsis, watchAvailability, ::MediaSectionState)
+    private val mediaSection = combine(workingMedia, synopsis, watchAvailability, airingSection, ::MediaSectionState)
 
     val uiState: StateFlow<DetailUiState> = combine(
         isLoading,
@@ -206,6 +245,8 @@ class DetailViewModel @Inject constructor(
             media = mediaState.media,
             synopsis = mediaState.synopsis,
             watchAvailability = mediaState.watchAvailability,
+            nextAiring = mediaState.airing.nextAiring,
+            reminderEnabled = mediaState.airing.reminderEnabled,
             seasons = seasonList,
             selectedSeasonNumber = selectedSeason,
             episodes = episodesState.episodes,
@@ -249,6 +290,16 @@ class DetailViewModel @Inject constructor(
     // note actuelle (voir `RatingSection`) doit pouvoir revenir à cet état, pas seulement en
     // choisir une nouvelle.
     fun onRatingSelected(rating: Int?) = applyEdit { it.copy(rating = rating) }
+
+    /**
+     * Active ou éteint le rappel de sortie d'épisodes. La permission de notification a déjà été
+     * obtenue par l'écran avant d'activer (voir `NotificationPermissionRequester`) ; sans ajout au
+     * suivi, il n'y a rien à rattacher et l'appel est ignoré.
+     */
+    fun onReminderToggled(enabled: Boolean) {
+        val id = workingMedia.value?.id?.takeIf { it.isNotEmpty() } ?: return
+        viewModelScope.launch { reminderRepository.setEnabled(id, enabled) }
+    }
 
     fun onSeasonSelected(seasonNumber: Int) {
         selectedSeasonNumber.value = seasonNumber

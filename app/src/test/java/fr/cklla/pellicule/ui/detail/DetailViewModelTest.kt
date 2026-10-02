@@ -1,12 +1,16 @@
 package fr.cklla.pellicule.ui.detail
 
 import androidx.lifecycle.SavedStateHandle
+import fr.cklla.pellicule.data.repository.EpisodeReminderRepositoryImpl
 import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
+import fr.cklla.pellicule.data.repository.FakeEpisodeReminderDao
 import fr.cklla.pellicule.data.repository.FakeEpisodeDao
 import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
 import fr.cklla.pellicule.data.repository.FakeMediaDao
 import fr.cklla.pellicule.data.repository.FakeTvShowInfoRepository
 import fr.cklla.pellicule.data.repository.fakeMediaRepository
+import fr.cklla.pellicule.domain.model.AirDate
+import fr.cklla.pellicule.domain.model.EpisodeAirInfo
 import fr.cklla.pellicule.domain.model.EpisodeInfo
 import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.JellyfinSession
@@ -14,9 +18,12 @@ import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.Season
+import fr.cklla.pellicule.domain.model.TvShowInfo
+import fr.cklla.pellicule.domain.model.TvShowStatus
 import fr.cklla.pellicule.domain.model.WatchAvailability
 import fr.cklla.pellicule.domain.model.WatchProvider
 import fr.cklla.pellicule.domain.model.WatchStatus
+import fr.cklla.pellicule.domain.repository.EpisodeReminderRepository
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
@@ -44,6 +51,9 @@ class DetailViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
 
+    // 2026-10-08 à midi UTC.
+    private var now = 1_791_460_800_000L
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -63,6 +73,7 @@ class DetailViewModelTest {
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
         watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
         tvShowInfoRepository: FakeTvShowInfoRepository = FakeTvShowInfoRepository(),
+        reminderRepository: EpisodeReminderRepository = EpisodeReminderRepositoryImpl(FakeEpisodeReminderDao()),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf(PelliculeDestinations.DETAIL_ARG_MEDIA_ID to mediaId)),
         mediaRepository = mediaRepository,
@@ -78,6 +89,9 @@ class DetailViewModelTest {
             jellyfinRepository,
             TimeSource { 1_790_000_000_000L },
         ),
+        tvShowInfoRepository = tvShowInfoRepository,
+        reminderRepository = reminderRepository,
+        timeSource = TimeSource { now },
     )
 
     private fun previewViewModelFor(
@@ -93,6 +107,7 @@ class DetailViewModelTest {
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
         watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
         tvShowInfoRepository: FakeTvShowInfoRepository = FakeTvShowInfoRepository(),
+        reminderRepository: EpisodeReminderRepository = EpisodeReminderRepositoryImpl(FakeEpisodeReminderDao()),
     ) = DetailViewModel(
         savedStateHandle = SavedStateHandle(
             mapOf(
@@ -116,6 +131,9 @@ class DetailViewModelTest {
             jellyfinRepository,
             TimeSource { 1_790_000_000_000L },
         ),
+        tvShowInfoRepository = tvShowInfoRepository,
+        reminderRepository = reminderRepository,
+        timeSource = TimeSource { now },
     )
 
     @Test
@@ -374,6 +392,9 @@ class DetailViewModelTest {
                 jellyfinRepository,
                 TimeSource { 1_790_000_000_000L },
             ),
+            tvShowInfoRepository = FakeTvShowInfoRepository(),
+            reminderRepository = EpisodeReminderRepositoryImpl(FakeEpisodeReminderDao()),
+            timeSource = TimeSource { now },
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
         dispatcher.scheduler.advanceUntilIdle()
@@ -607,6 +628,123 @@ class DetailViewModelTest {
         val stored = repository.observeMediaById(mediaId).first()
         assertEquals(WatchStatus.EN_COURS, stored?.status)
         assertEquals(4, stored?.rating)
+        collectorJob.cancel()
+    }
+
+    private fun airingShow(
+        tmdbId: Long = 42,
+        airDate: String? = "2026-10-15",
+        status: TvShowStatus = TvShowStatus.EN_DIFFUSION,
+    ) = TvShowInfo(
+        tmdbId = tmdbId,
+        status = status,
+        seasonEpisodeCounts = emptyMap(),
+        lastAired = null,
+        nextToAir = EpisodeAirInfo(EpisodeKey(2, 5), AirDate.parse(airDate), title = null),
+    )
+
+    private suspend fun trackedSeries(repository: MediaRepository, type: MediaType = MediaType.SERIE): String =
+        (repository.addMedia(Media(title = "Severance", type = type, status = WatchStatus.EN_COURS, tmdbId = 42)) as Resource.Success).data
+
+    @Test
+    fun `une serie en diffusion expose sa prochaine diffusion`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val id = trackedSeries(repository)
+        val tvShows = FakeTvShowInfoRepository(listOf(airingShow()))
+        val viewModel = viewModelFor(id, repository, tvShowInfoRepository = tvShows)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val airing = viewModel.uiState.value.nextAiring
+        assertEquals(AirDate.parse("2026-10-15"), airing?.airDate)
+        assertEquals(EpisodeKey(2, 5), airing?.key)
+        assertEquals(listOf(42L), tvShows.refreshedShows)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `une serie terminee n'expose aucune prochaine diffusion`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val id = trackedSeries(repository)
+        val viewModel = viewModelFor(id, repository, tvShowInfoRepository = FakeTvShowInfoRepository(listOf(airingShow(status = TvShowStatus.TERMINEE))))
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.nextAiring)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `sans date connue, aucune prochaine diffusion`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val id = trackedSeries(repository)
+        val viewModel = viewModelFor(id, repository, tvShowInfoRepository = FakeTvShowInfoRepository(listOf(airingShow(airDate = null))))
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.nextAiring)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `un film n'interroge pas le cache des series`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val id = trackedSeries(repository, type = MediaType.FILM)
+        val tvShows = FakeTvShowInfoRepository(listOf(airingShow()))
+        val viewModel = viewModelFor(id, repository, tvShowInfoRepository = tvShows)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.nextAiring)
+        assertTrue(tvShows.refreshedShows.isEmpty())
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `l'apercu d'une serie en diffusion montre la prochaine diffusion sans etre suivi`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val viewModel = previewViewModelFor(repository, tmdbId = 42, tvShowInfoRepository = FakeTvShowInfoRepository(listOf(airingShow())))
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isInBacklog)
+        assertEquals(AirDate.parse("2026-10-15"), state.nextAiring?.airDate)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `le rappel est desactive par defaut puis suit l'interrupteur`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val id = trackedSeries(repository)
+        val viewModel = viewModelFor(id, repository, tvShowInfoRepository = FakeTvShowInfoRepository(listOf(airingShow())))
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.reminderEnabled)
+
+        viewModel.onReminderToggled(true)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.reminderEnabled)
+
+        viewModel.onReminderToggled(false)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.reminderEnabled)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `activer un rappel depuis l'apercu est ignore`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val reminders = EpisodeReminderRepositoryImpl(FakeEpisodeReminderDao())
+        val viewModel = previewViewModelFor(repository, reminderRepository = reminders)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onReminderToggled(true)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.reminderEnabled)
+        assertTrue(reminders.getEnabledReminders().isEmpty())
         collectorJob.cancel()
     }
 }

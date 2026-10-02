@@ -26,6 +26,14 @@ interface TvShowInfoRepository {
     suspend fun refreshIfStale(tmdbId: Long)
 
     /**
+     * Recharge la fiche de la série au plus une fois par jour calendaire (un appel par série et par
+     * jour), pour les rappels de sortie qui ont besoin de la date du prochain épisode à jour. Une
+     * série terminée ou annulée garde la validité longue de [refreshIfStale] : plus rien ne change.
+     * Silencieux en cas d'échec.
+     */
+    suspend fun refreshOncePerDay(tmdbId: Long)
+
+    /**
      * Recharge titres et dates des épisodes d'une saison (`GET /tv/{id}/season/{n}`) si elle n'a
      * jamais été chargée ou si son détail est périmé. Ne fait rien tant que la série n'est pas en
      * cache. Silencieux en cas d'échec.

@@ -1,5 +1,6 @@
 package fr.cklla.pellicule
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,6 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -22,6 +26,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import fr.cklla.pellicule.notification.NotificationDestination
 import fr.cklla.pellicule.ui.AppTab
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
@@ -34,6 +39,7 @@ import fr.cklla.pellicule.ui.login.AuthGateViewModel
 import fr.cklla.pellicule.ui.login.LoginScreen
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import fr.cklla.pellicule.ui.navigation.route
+import fr.cklla.pellicule.ui.navigation.toRoute
 import fr.cklla.pellicule.ui.recherche.RechercheScreen
 import fr.cklla.pellicule.ui.sync.AppSyncViewModel
 import fr.cklla.pellicule.ui.theme.BackgroundDark
@@ -41,6 +47,12 @@ import fr.cklla.pellicule.ui.theme.PelliculeTheme
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    // Écran à ouvrir si l'activité a été lancée, ou ramenée au premier plan (voir onNewIntent),
+    // depuis une notification ; `null` pour un lancement normal. `mutableStateOf` pour que
+    // PelliculeApp y réagisse par recomposition.
+    private var pendingDestination by mutableStateOf<NotificationDestination?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // L'app n'a qu'un thème sombre définitif : les barres système doivent toujours afficher
@@ -50,11 +62,25 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
+        // Relu seulement au premier lancement : après une recréation (rotation), l'intent d'origine
+        // est toujours là et rouvrirait l'écran déjà consommé.
+        if (savedInstanceState == null) pendingDestination = NotificationDestination.fromIntent(intent)
         setContent {
             PelliculeTheme {
-                PelliculeApp()
+                PelliculeApp(
+                    pendingDestination = pendingDestination,
+                    onPendingDestinationConsumed = { pendingDestination = null },
+                )
             }
         }
+    }
+
+    // `launchMode="singleTask"` (voir le manifeste) : si l'app tourne déjà, taper une notification
+    // ramène cette même instance au premier plan via onNewIntent plutôt que d'en recréer une.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingDestination = NotificationDestination.fromIntent(intent)
     }
 }
 
@@ -68,7 +94,11 @@ class MainActivity : ComponentActivity() {
 // qui démarre toujours sur la Bibliothèque. Jellyfin reste indépendant de ce compte Google : sa
 // connexion propre se fait séparément depuis l'onglet Compte.
 @Composable
-fun PelliculeApp(authGateViewModel: AuthGateViewModel = hiltViewModel()) {
+fun PelliculeApp(
+    authGateViewModel: AuthGateViewModel = hiltViewModel(),
+    pendingDestination: NotificationDestination? = null,
+    onPendingDestinationConsumed: () -> Unit = {},
+) {
     val currentUser by authGateViewModel.currentUser.collectAsStateWithLifecycle()
     if (currentUser == null) {
         LoginScreen()
@@ -78,6 +108,16 @@ fun PelliculeApp(authGateViewModel: AuthGateViewModel = hiltViewModel()) {
     val navController = rememberNavController()
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     val selectedTab = AppTab.entries.find { it.route == currentRoute }
+
+    // Notification tapée : ouvre l'écran visé, puis se déclare consommée pour ne pas re-naviguer à
+    // chaque recomposition. Placé après le portail de connexion : une destination reçue avant la
+    // connexion est ouverte dès qu'elle aboutit.
+    LaunchedEffect(pendingDestination) {
+        pendingDestination?.let { destination ->
+            destination.toRoute()?.let { route -> navController.navigate(route) }
+            onPendingDestinationConsumed()
+        }
+    }
 
     // Synchro Jellyfin (statut vu des épisodes) à chaque ouverture/reprise de l'app, pas
     // seulement pour la série consultée (voir `AppSyncViewModel`) — no-op si aucun serveur n'est

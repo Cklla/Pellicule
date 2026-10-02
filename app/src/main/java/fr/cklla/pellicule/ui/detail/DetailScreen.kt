@@ -57,6 +57,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import fr.cklla.pellicule.R
+import fr.cklla.pellicule.domain.calendar.NextAiring
+import fr.cklla.pellicule.domain.model.AirDate
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Season
@@ -103,6 +106,8 @@ fun DetailScreen(
         isInBacklog = uiState.isInBacklog,
         synopsis = uiState.synopsis,
         watchAvailability = uiState.watchAvailability,
+        nextAiring = uiState.nextAiring,
+        reminderEnabled = uiState.reminderEnabled,
         seasons = uiState.seasons,
         selectedSeasonNumber = uiState.selectedSeasonNumber,
         episodes = uiState.episodes,
@@ -113,6 +118,7 @@ fun DetailScreen(
         onRatingSelected = viewModel::onRatingSelected,
         onSeasonSelected = viewModel::onSeasonSelected,
         onEpisodeWatchedToggled = viewModel::onEpisodeWatchedToggled,
+        onReminderToggled = viewModel::onReminderToggled,
         onRemoveMedia = viewModel::onRemoveMedia,
         onAddMedia = viewModel::onAddMedia,
         modifier = modifier,
@@ -125,6 +131,8 @@ private fun DetailContent(
     isInBacklog: Boolean,
     synopsis: String?,
     watchAvailability: WatchAvailability?,
+    nextAiring: NextAiring?,
+    reminderEnabled: Boolean,
     seasons: List<Season>,
     selectedSeasonNumber: Int?,
     episodes: List<EpisodeUiModel>,
@@ -135,6 +143,7 @@ private fun DetailContent(
     onRatingSelected: (Int?) -> Unit,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeWatchedToggled: (EpisodeUiModel) -> Unit,
+    onReminderToggled: (Boolean) -> Unit,
     onRemoveMedia: () -> Unit,
     onAddMedia: () -> Unit,
     modifier: Modifier = Modifier,
@@ -177,6 +186,16 @@ private fun DetailContent(
             // disponibilité inconnue le temps de l'appel réseau.
             watchAvailability?.let { availability ->
                 AvailabilitySection(availability = availability, type = media.type)
+            }
+            // Visible dès l'aperçu : le calendrier informe avant l'ajout. Le rappel, lui, n'est
+            // proposé qu'une fois le contenu suivi (il s'y rattache).
+            nextAiring?.let { airing ->
+                NextAiringSection(
+                    airing = airing,
+                    reminderEnabled = reminderEnabled,
+                    canRemind = isInBacklog,
+                    onReminderToggled = onReminderToggled,
+                )
             }
             // Statut, retrait et épisodes n'ont de sens que pour un contenu réellement suivi :
             // masqués tant que la fiche n'est qu'un aperçu ouvert depuis la Recherche (voir
@@ -384,7 +403,7 @@ private fun JustWatchCredit(link: String?) {
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     Text(text = text.uppercase(Locale.FRENCH), style = PelliculeTextStyles.sectionLabel, color = TextMuted)
 }
 
@@ -690,6 +709,8 @@ private fun DetailContentPreview() {
                 rentOrBuy = emptyList(),
                 link = "https://www.themoviedb.org/movie/10494/watch?locale=FR",
             ),
+            nextAiring = NextAiring(EpisodeKey(2, 5), AirDate.parse("2026-10-08")!!, title = null),
+            reminderEnabled = true,
             seasons = listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 2, posterUrl = null)),
             selectedSeasonNumber = 1,
             episodes = episodes,
@@ -700,6 +721,7 @@ private fun DetailContentPreview() {
             onRatingSelected = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
+            onReminderToggled = {},
             onRemoveMedia = {},
             onAddMedia = {},
         )
@@ -716,6 +738,8 @@ private fun DetailContentApercuPreview() {
             isInBacklog = false,
             synopsis = null,
             watchAvailability = WatchAvailability.Unknown,
+            nextAiring = null,
+            reminderEnabled = false,
             seasons = emptyList(),
             selectedSeasonNumber = null,
             episodes = emptyList(),
@@ -726,6 +750,7 @@ private fun DetailContentApercuPreview() {
             onRatingSelected = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
+            onReminderToggled = {},
             onRemoveMedia = {},
             onAddMedia = {},
         )

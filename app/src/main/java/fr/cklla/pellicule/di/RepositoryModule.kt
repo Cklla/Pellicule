@@ -9,6 +9,7 @@ import fr.cklla.pellicule.data.local.JellyfinSessionStoreImpl
 import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSource
 import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSourceImpl
 import fr.cklla.pellicule.data.repository.AuthRepositoryImpl
+import fr.cklla.pellicule.data.repository.EpisodeReminderRepositoryImpl
 import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
 import fr.cklla.pellicule.data.repository.JellyfinRepositoryImpl
 import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
@@ -18,6 +19,7 @@ import fr.cklla.pellicule.data.repository.TvDetailsRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvShowInfoRepositoryImpl
 import fr.cklla.pellicule.data.repository.WatchProvidersRepositoryImpl
 import fr.cklla.pellicule.domain.repository.AuthRepository
+import fr.cklla.pellicule.domain.repository.EpisodeReminderRepository
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
@@ -45,6 +47,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindEpisodeRepository(impl: EpisodeRepositoryImpl): EpisodeRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindEpisodeReminderRepository(impl: EpisodeReminderRepositoryImpl): EpisodeReminderRepository
 
     @Binds
     @Singleton

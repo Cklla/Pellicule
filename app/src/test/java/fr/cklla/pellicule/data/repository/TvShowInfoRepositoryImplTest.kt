@@ -116,6 +116,66 @@ class TvShowInfoRepositoryImplTest {
     }
 
     @Test
+    fun `le rafraichissement quotidien appelle TMDB une seule fois par jour`() = runTest {
+        val repository = repository()
+
+        repository.refreshOncePerDay(42)
+        repository.refreshOncePerDay(42)
+        now += 2 * hour
+        repository.refreshOncePerDay(42)
+
+        assertEquals(1, api.tvDetailsCalls)
+    }
+
+    @Test
+    fun `le rafraichissement quotidien se refait le lendemain meme avant 24 heures`() = runTest {
+        val repository = repository()
+        repository.refreshOncePerDay(42)
+
+        // Deux jours plus tard : un autre jour calendaire quel que soit le fuseau de la machine.
+        now += 2 * day
+        repository.refreshOncePerDay(42)
+
+        assertEquals(2, api.tvDetailsCalls)
+    }
+
+    @Test
+    fun `le rafraichissement quotidien ne s'applique pas a une serie terminee`() = runTest {
+        api.tvStatus = "Ended"
+        api.nextEpisodeToAir = null
+        val repository = repository()
+        repository.refreshOncePerDay(42)
+
+        now += 5 * day
+        repository.refreshOncePerDay(42)
+
+        assertEquals(1, api.tvDetailsCalls)
+    }
+
+    @Test
+    fun `le rafraichissement quotidien traite une horloge reculee comme perimee`() = runTest {
+        val repository = repository()
+        repository.refreshOncePerDay(42)
+
+        now -= hour
+        repository.refreshOncePerDay(42)
+
+        assertEquals(2, api.tvDetailsCalls)
+    }
+
+    @Test
+    fun `un echec reseau au rafraichissement quotidien conserve le cache`() = runTest {
+        val repository = repository()
+        repository.refreshOncePerDay(42)
+
+        api.shouldThrow = true
+        now += 2 * day
+        repository.refreshOncePerDay(42)
+
+        assertEquals(EpisodeKey(2, 5), repository.getCachedShow(42)?.nextToAir?.key)
+    }
+
+    @Test
     fun `un rafraichissement met a jour la fiche en cache`() = runTest {
         val repository = repository()
         repository.refreshIfStale(42)
