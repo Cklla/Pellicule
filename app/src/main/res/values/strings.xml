@@ -63,6 +63,12 @@
     <string name="detail_remove_confirm_message">Cette action est définitive : le contenu et son statut seront supprimés.</string>
     <string name="detail_remove_confirm_confirm">Retirer</string>
     <string name="detail_remove_confirm_cancel">Annuler</string>
+    <string name="detail_next_airing_label">Prochaine diffusion</string>
+    <string name="detail_next_airing_line">É%1$d · %2$s</string>
+    <string name="detail_next_airing_line_season">S%1$d · É%2$d · %3$s</string>
+    <string name="detail_next_airing_disclaimer">Date de diffusion dans le pays d\'origine : selon le fuseau horaire, elle peut tomber un jour plus tôt ou plus tard en France.</string>
+    <string name="detail_reminder_label">Me prévenir à la sortie de chaque épisode</string>
+    <string name="detail_reminder_denied">Notifications refusées : le rappel reste désactivé.</string>
     <string name="detail_episodes_label">Épisodes</string>
     <string name="detail_episode_number_label">Ép. %1$d</string>
     <string name="detail_episodes_empty">Aucun épisode trouvé pour cette saison.</string>
@@ -115,4 +121,10 @@
     <string name="jellyfin_push_history_confirm_confirm">Renvoyer</string>
     <string name="jellyfin_push_history_confirm_cancel">Annuler</string>
     <string name="jellyfin_push_history_result">%1$d film(s) et %2$d épisode(s) marqués vus sur Jellyfin.</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_new_episodes_name">Nouveaux épisodes</string>
+    <string name="notification_channel_new_episodes_description">Prévient le jour où sort un nouvel épisode d\'une série ou d\'un anime suivi.</string>
+    <string name="notification_new_episode_title">Nouvel épisode</string>
+    <string name="notification_new_episode_text">%1$s : l\'épisode %2$d sort aujourd\'hui</string>
 </resources>

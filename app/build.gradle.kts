@@ -126,6 +126,12 @@ dependencies {
     ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
 
+    // Tâches périodiques en arrière-plan (rappels de sortie d'épisodes) : le Worker se fait injecter
+    // ses dépendances par Hilt comme n'importe quel autre composant.
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
+
     // Chargement des jaquettes réelles renvoyées par TMDB
     implementation(libs.coil.compose)
 
