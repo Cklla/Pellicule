@@ -16,6 +16,9 @@ interface EpisodeRepository {
     /** Épisodes marqués vus pour un contenu suivi, mis à jour automatiquement à chaque changement. */
     fun observeWatchedEpisodes(mediaId: String): Flow<Set<EpisodeKey>>
 
+    /** Épisodes vus de tous les contenus suivis, par id de contenu : une seule requête pour toute la Bibliothèque. */
+    fun observeAllWatchedEpisodes(): Flow<Map<String, Set<EpisodeKey>>>
+
     /** Marque un épisode vu ou non vu pour un contenu suivi. */
     suspend fun setEpisodeWatched(mediaId: String, episode: EpisodeKey, watched: Boolean): Resource<Unit>
 
