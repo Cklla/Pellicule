@@ -42,6 +42,16 @@ optionnelle avec un serveur Jellyfin.
   fiche. La permission de notification n'est demandée qu'à la première activation, et refusée elle
   n'empêche pas le calendrier. TMDB ne fournit qu'une date, dans le fuseau du pays d'origine : pour un
   anime elle peut différer d'un jour en France.
+- **Statistiques** : depuis l'onglet Compte, nombre de contenus vus et répartition par type (film,
+  série, anime) sous forme d'anneau avec légende, filtrables par année de visionnage et par type.
+  Les contenus passés en Vu avant l'introduction de la date de visionnage n'ont pas d'année : ils ne
+  comptent que sous « Toutes les années ».
+- **Récap annuel** : du 25 décembre au 31 janvier, une carte « Récap <année> » apparaît dans l'onglet
+  Compte (l'année en cours fin décembre, l'année écoulée en janvier, rien le reste de l'année). Elle
+  ouvre le bilan de l'année : total de contenus vus et compteur par type, chacun menant à la liste
+  correspondante. Une notification locale prévient une seule fois par année, un tap ouvre le récap ;
+  la permission de notification est demandée une seule fois après la connexion, et son refus
+  n'empêche pas d'accéder au récap.
 - **Recherche** : recherche multi-type via l'[API TMDB](https://www.themoviedb.org/documentation/api)
   (titre, affiche, année), aperçu de la fiche avant ajout, ajout en un tap au suivi. Fiches en
   français en priorité, avec fallback sur l'anglais quand la traduction française manque.
@@ -64,13 +74,13 @@ optionnelle avec un serveur Jellyfin.
 
 ## Captures d'écran
 
-| Connexion | Bibliothèque | Recherche |
-|:---:|:---:|:---:|
-| ![Connexion](screenshots/login.png) | ![Bibliothèque](screenshots/bibliotheque.png) | ![Recherche](screenshots/recherche.png) |
+| Connexion | Bibliothèque | Recherche | Détail |
+|:---:|:---:|:---:|:---:|
+| <img src="screenshots/login.png" width="200" alt="Connexion"> | <img src="screenshots/bibliotheque.png" width="200" alt="Bibliothèque"> | <img src="screenshots/recherche.png" width="200" alt="Recherche"> | <img src="screenshots/detail.png" width="200" alt="Détail"> |
 
-| Détail | Compte | Calendrier |
-|:---:|:---:|:---:|
-| ![Détail](screenshots/detail.png) | ![Compte](screenshots/compte.png) | ![Calendrier](screenshots/calendrier.png) |
+| Compte | Statistiques | Récap annuel | Calendrier |
+|:---:|:---:|:---:|:---:|
+| <img src="screenshots/compte.png" width="200" alt="Compte"> | <img src="screenshots/statistiques.png" width="200" alt="Statistiques"> | <img src="screenshots/recap.png" width="200" alt="Récap annuel"> | <img src="screenshots/calendrier.png" width="200" alt="Calendrier"> |
 
 ## Stack technique
 
@@ -82,7 +92,7 @@ optionnelle avec un serveur Jellyfin.
 | Persistance locale | Room 2.8 |
 | Réseau | Retrofit 3 + Moshi (TMDB, Jellyfin) |
 | Injection de dépendances | Hilt |
-| Tâches en arrière-plan | WorkManager (contrôle quotidien des rappels de sortie d'épisodes, via `hilt-work`) |
+| Tâches en arrière-plan | WorkManager (contrôle quotidien des rappels de sortie d'épisodes et de la notification du récap annuel, via `hilt-work`) |
 | Cloud | Firebase Firestore (données) + Firebase Auth (Google Sign-In) |
 | Chargement d'images | Coil |
 | Tests | JUnit4 + kotlinx-coroutines-test, tests unitaires basés sur des fakes (pas de mock ni Robolectric) |
@@ -266,10 +276,11 @@ app/src/main/java/fr/cklla/pellicule/
 │   │   └── jellyfin/   # Client Jellyfin (auth, statut vu, DTO)
 │   └── repository/     # Implémentations concrètes des repositories
 ├── di/                  # Modules Hilt
-├── notification/        # Canaux, destination d'ouverture, Worker et notification des rappels
+├── notification/        # Canaux, destination d'ouverture, Workers et notifications (rappels d'épisodes, récap annuel)
 ├── domain/
 │   ├── calendar/        # Grille du calendrier mensuel et règles de rappel (fonctions pures)
 │   ├── model/           # Modèles métier (Media, WatchStatus, Resource, AuthUser…)
+│   ├── recap/           # Fenêtre du récap annuel et règle de notification (fonctions pures)
 │   ├── repository/      # Interfaces de repository
 │   └── usecase/         # Cas d'usage partagés (cocher un épisode)
 └── ui/
@@ -277,7 +288,8 @@ app/src/main/java/fr/cklla/pellicule/
     ├── detail/          # Écran Détail d'un contenu (statut, épisodes, note)
     ├── login/           # Écran de connexion Google
     ├── recherche/       # Écran Recherche TMDB
-    ├── compte/          # Écran Compte (déconnexion, connexion Jellyfin)
+    ├── compte/          # Écran Compte (déconnexion, connexion Jellyfin, accès aux statistiques, carte du récap)
+    ├── stats/           # Écrans Statistiques, Récap annuel et liste des contenus vus
     ├── jellyfin/         # Écran de connexion à un serveur Jellyfin
     ├── sync/              # Synchro Jellyfin déclenchée à la reprise de l'app
     ├── navigation/         # Routes Navigation Compose
@@ -301,6 +313,12 @@ app/src/main/java/fr/cklla/pellicule/
   d'après la date de l'appareil et les dates TMDB en cache ; pas de Firebase Cloud Messaging. Les
   rappels vivent uniquement dans Room (propres à l'appareil, jamais synchronisés), et une seule
   notification part par épisode.
+- **Notification du récap annuel locale, une fois par année** : même mécanique que les rappels
+  d'épisodes (job WorkManager quotidien, date de l'appareil, pas de FCM). Le drapeau « déjà notifié
+  pour l'année X » vit dans les `SharedPreferences`, et n'est posé que si la notification a réellement
+  été affichée : sans permission, elle reste due et part dès que la permission est accordée dans la
+  fenêtre. Les statistiques et le récap se calculent en direct sur Room, aucune donnée supplémentaire
+  n'est synchronisée.
 - **La synchro Jellyfin ne peut que faire progresser le suivi** : le pull ajoute les épisodes vus du
   serveur sans jamais dévoir ce qui l'est déjà localement, ni faire régresser un statut — un serveur
   réinstallé sans son historique ne peut pas effacer le suivi. Les retours en arrière se font depuis
