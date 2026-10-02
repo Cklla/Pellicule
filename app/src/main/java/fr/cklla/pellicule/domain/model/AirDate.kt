@@ -15,10 +15,23 @@ value class AirDate private constructor(val iso: String) : Comparable<AirDate> {
 
     override fun compareTo(other: AirDate): Int = iso.compareTo(other.iso)
 
+    val year: Int get() = iso.substring(0, 4).toInt()
+
+    /** Mois de 1 (janvier) à 12. */
+    val month: Int get() = iso.substring(5, 7).toInt()
+
+    val day: Int get() = iso.substring(8, 10).toInt()
+
     /** Date au format affichable (ex. « 12 oct. »), d'après le [locale] fourni. */
     fun format(locale: Locale, timeZone: TimeZone = TimeZone.getDefault()): String {
         val parsed = SimpleDateFormat(PATTERN, Locale.ROOT).apply { this.timeZone = timeZone }.parse(iso) ?: return iso
         return SimpleDateFormat("d MMM", locale).apply { this.timeZone = timeZone }.format(parsed)
+    }
+
+    /** Date complète affichable (ex. « jeudi 8 octobre »), d'après le [locale] fourni. */
+    fun formatLong(locale: Locale, timeZone: TimeZone = TimeZone.getDefault()): String {
+        val parsed = SimpleDateFormat(PATTERN, Locale.ROOT).apply { this.timeZone = timeZone }.parse(iso) ?: return iso
+        return SimpleDateFormat("EEEE d MMMM", locale).apply { this.timeZone = timeZone }.format(parsed)
     }
 
     companion object {

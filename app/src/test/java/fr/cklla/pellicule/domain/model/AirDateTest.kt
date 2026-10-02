@@ -37,4 +37,20 @@ class AirDateTest {
 
         assertTrue(formatted, formatted.startsWith("8 oct"))
     }
+
+    @Test
+    fun `annee, mois et jour sont lus depuis la date ISO`() {
+        val date = AirDate.parse("2026-10-08")!!
+
+        assertEquals(2026, date.year)
+        assertEquals(10, date.month)
+        assertEquals(8, date.day)
+    }
+
+    @Test
+    fun `formatLong affiche le jour de la semaine, le jour et le mois`() {
+        val formatted = AirDate.parse("2026-10-08")!!.formatLong(Locale.FRENCH, TimeZone.getTimeZone("UTC"))
+
+        assertEquals("jeudi 8 octobre", formatted)
+    }
 }
