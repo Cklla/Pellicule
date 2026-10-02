@@ -30,6 +30,11 @@ optionnelle avec un serveur Jellyfin.
 
 - **Bibliothèque** : liste du suivi avec statut visuel (À voir / En cours / Vu), films, séries et
   anime confondus.
+- **Prochain épisode et « +1 »** : sur la carte d'une série ou d'un anime En cours, l'épisode non vu
+  suivant (« S2 · É5 — titre ») avec un bouton « +1 » qui le marque vu d'un tap. Un épisode pas encore
+  diffusé affiche sa date de sortie à la place. Cocher le premier épisode passe un contenu À voir
+  en En cours ; atteindre le dernier épisode d'une série terminée le passe en Vu. Fonctionne hors
+  ligne.
 - **Recherche** : recherche multi-type via l'[API TMDB](https://www.themoviedb.org/documentation/api)
   (titre, affiche, année), aperçu de la fiche avant ajout, ajout en un tap au suivi. Fiches en
   français en priorité, avec fallback sur l'anglais quand la traduction française manque.
@@ -246,7 +251,7 @@ dépendances (pas de mocking ni de Robolectric), pour des tests rapides et déte
 ```
 app/src/main/java/fr/cklla/pellicule/
 ├── data/
-│   ├── local/          # Room : entités, DAO, base de données, session Jellyfin chiffrée
+│   ├── local/          # Room : entités, DAO, base de données, cache des métadonnées de séries, session Jellyfin chiffrée
 │   ├── remote/
 │   │   ├── dto/        # Réponses API TMDB
 │   │   ├── firestore/  # Source de données Firestore + mapping
@@ -255,7 +260,8 @@ app/src/main/java/fr/cklla/pellicule/
 ├── di/                  # Modules Hilt
 ├── domain/
 │   ├── model/           # Modèles métier (Media, WatchStatus, Resource, AuthUser…)
-│   └── repository/      # Interfaces de repository
+│   ├── repository/      # Interfaces de repository
+│   └── usecase/         # Cas d'usage partagés (cocher un épisode)
 └── ui/
     ├── bibliotheque/    # Écran Bibliothèque
     ├── detail/          # Écran Détail d'un contenu (statut, épisodes, note)
