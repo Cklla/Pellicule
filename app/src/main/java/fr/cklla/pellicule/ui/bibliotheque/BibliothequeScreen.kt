@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -37,7 +39,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.cklla.pellicule.R
 import fr.cklla.pellicule.domain.model.Media
+import fr.cklla.pellicule.domain.model.AirDate
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.MediaType
+import fr.cklla.pellicule.domain.model.NextEpisode
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.ui.components.MediaCoverPlaceholder
 import fr.cklla.pellicule.ui.components.StatusBadge
@@ -54,6 +59,7 @@ import fr.cklla.pellicule.ui.theme.TextMuted
 import fr.cklla.pellicule.ui.theme.TextPrimary
 import fr.cklla.pellicule.ui.theme.TextSecondary
 import fr.cklla.pellicule.ui.theme.TextTertiary
+import java.util.Locale
 
 @Composable
 fun BibliothequeScreen(
@@ -68,6 +74,7 @@ fun BibliothequeScreen(
         onWatchedYearSelected = viewModel::onWatchedYearSelected,
         onTypeSelected = viewModel::onTypeSelected,
         onMediaClick = onMediaClick,
+        onWatchNextEpisode = viewModel::onWatchNextEpisode,
         modifier = modifier,
     )
 }
@@ -79,6 +86,7 @@ private fun BibliothequeContent(
     onWatchedYearSelected: (Int?) -> Unit,
     onTypeSelected: (MediaType?) -> Unit,
     onMediaClick: (String) -> Unit,
+    onWatchNextEpisode: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -112,7 +120,12 @@ private fun BibliothequeContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(items = uiState.visibleMedia, key = { it.id }) { media ->
-                    MediaCard(media = media, onClick = { onMediaClick(media.id) })
+                    MediaCard(
+                        media = media,
+                        nextEpisode = uiState.nextEpisodes[media.id],
+                        onClick = { onMediaClick(media.id) },
+                        onWatchNextEpisode = { onWatchNextEpisode(media.id) },
+                    )
                 }
             }
         }
@@ -260,7 +273,12 @@ private fun TypeChipsRow(
 }
 
 @Composable
-private fun MediaCard(media: Media, onClick: () -> Unit) {
+private fun MediaCard(
+    media: Media,
+    nextEpisode: NextEpisode?,
+    onClick: () -> Unit,
+    onWatchNextEpisode: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -278,7 +296,7 @@ private fun MediaCard(media: Media, onClick: () -> Unit) {
             posterUrl = media.posterUrl,
             letterStyle = PelliculeTextStyles.coverLetterListCard,
         )
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = media.title,
                 style = PelliculeTextStyles.cardTitle,
@@ -297,6 +315,93 @@ private fun MediaCard(media: Media, onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(6.dp))
             StatusBadge(status = media.status)
+            if (nextEpisode != null) {
+                NextEpisodeRow(media = media, nextEpisode = nextEpisode, onWatch = onWatchNextEpisode)
+            }
+        }
+    }
+}
+
+/**
+ * Prochain épisode d'une série/anime En cours : « S2 · É5 — titre » avec le "+1" quand l'épisode
+ * est déjà sorti, sinon sa date de sortie. Rien à afficher pour une série terminée ou sans
+ * métadonnées en cache.
+ */
+@Composable
+private fun NextEpisodeRow(media: Media, nextEpisode: NextEpisode, onWatch: () -> Unit) {
+    when (nextEpisode) {
+        is NextEpisode.Available -> Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = episodeLabel(nextEpisode.key, nextEpisode.title),
+                style = PelliculeTextStyles.cardSubtitle,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            PlusOneButton(
+                contentDescription = stringResource(
+                    R.string.next_episode_plus_one_content_description,
+                    nextEpisode.key.seasonNumber,
+                    nextEpisode.key.episodeNumber,
+                    media.title,
+                ),
+                onClick = onWatch,
+            )
+        }
+        is NextEpisode.Upcoming -> NextEpisodeCaption(
+            text = nextEpisode.airDate
+                ?.let { stringResource(R.string.next_episode_upcoming_dated, it.format(Locale.FRENCH)) }
+                ?: stringResource(R.string.next_episode_upcoming_undated),
+        )
+        NextEpisode.UpToDate -> NextEpisodeCaption(text = stringResource(R.string.next_episode_up_to_date))
+        NextEpisode.Completed, NextEpisode.Unknown -> Unit
+    }
+}
+
+@Composable
+private fun NextEpisodeCaption(text: String) {
+    Text(
+        text = text,
+        style = PelliculeTextStyles.cardSubtitle,
+        color = TextMuted,
+        modifier = Modifier.padding(top = 6.dp),
+    )
+}
+
+@Composable
+private fun episodeLabel(key: EpisodeKey, title: String?): String =
+    if (title.isNullOrBlank()) {
+        stringResource(R.string.next_episode_label, key.seasonNumber, key.episodeNumber)
+    } else {
+        stringResource(R.string.next_episode_label_titled, key.seasonNumber, key.episodeNumber, title)
+    }
+
+@Composable
+private fun PlusOneButton(contentDescription: String, onClick: () -> Unit) {
+    Box(
+        // Zone de clic 48dp (accessibilité) autour de la pastille visuelle plus compacte.
+        modifier = Modifier
+            .size(48.dp)
+            .clickable(role = Role.Button, onClickLabel = contentDescription, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .heightIn(min = 30.dp)
+                .widthIn(min = 40.dp)
+                .clip(RoundedCornerShape(15.dp))
+                .background(AccentPurple),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = stringResource(R.string.next_episode_plus_one),
+                style = PelliculeTextStyles.chipLabel.copy(fontWeight = FontWeight.SemiBold),
+                color = TextPrimary,
+            )
         }
     }
 }
@@ -363,6 +468,37 @@ private fun BibliothequeContentPreview() {
             onWatchedYearSelected = {},
             onTypeSelected = {},
             onMediaClick = {},
+            onWatchNextEpisode = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A0812)
+@Composable
+private fun BibliothequeProchainEpisodePreview() {
+    val media = listOf(
+        Media(id = "1", title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, releaseYear = 2022),
+        Media(id = "2", title = "Perfect Blue", type = MediaType.ANIME, status = WatchStatus.EN_COURS, releaseYear = 1997),
+        Media(id = "3", title = "The Bear", type = MediaType.SERIE, status = WatchStatus.EN_COURS, releaseYear = 2022),
+    )
+    PelliculeTheme {
+        BibliothequeContent(
+            uiState = BibliothequeUiState(
+                isLoading = false,
+                visibleMedia = media,
+                selectedFilter = BibliothequeFilter.EN_COURS,
+                filterCounts = countByFilter(media),
+                nextEpisodes = mapOf(
+                    "1" to NextEpisode.Available(EpisodeKey(2, 5), "Trop de titre pour tenir sur une seule ligne"),
+                    "2" to NextEpisode.Upcoming(EpisodeKey(1, 2), null, AirDate.parse("2026-10-08")),
+                    "3" to NextEpisode.Available(EpisodeKey(3, 1), null),
+                ),
+            ),
+            onFilterSelected = {},
+            onWatchedYearSelected = {},
+            onTypeSelected = {},
+            onMediaClick = {},
+            onWatchNextEpisode = {},
         )
     }
 }
@@ -389,6 +525,7 @@ private fun BibliothequeVuAvecAnneesPreview() {
             onWatchedYearSelected = {},
             onTypeSelected = {},
             onMediaClick = {},
+            onWatchNextEpisode = {},
         )
     }
 }
@@ -403,6 +540,7 @@ private fun BibliothequeEmptyPreview() {
             onWatchedYearSelected = {},
             onTypeSelected = {},
             onMediaClick = {},
+            onWatchNextEpisode = {},
         )
     }
 }
