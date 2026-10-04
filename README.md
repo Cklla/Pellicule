@@ -59,9 +59,7 @@ optionnelle avec un serveur Jellyfin.
   slides façon *Wrapped*, à balayer : le total de contenus vus avec sa répartition par type, puis pour
   chaque type tes coups de cœur (affiches et étoiles, d'abord les 5 étoiles, complétés par des 4 étoiles
   s'il y en a moins de 3), les faits de l'année (premier et dernier contenu vus, mois le plus chargé,
-  contenu le plus ancien) et une mosaïque de tout ce que tu as vu, dans l'ordre chronologique. Un tap sur
-  une affiche ouvre la fiche. Les slides sans rien à montrer sont omises, et les contenus dont l'année a
-  été choisie à la main ne comptent pas dans les faits qui exigent une date exacte.
+  contenu le plus ancien) et une mosaïque de tout ce qui a été vu, dans l'ordre chronologique.
 - **Recherche** : recherche multi-type via l'[API TMDB](https://www.themoviedb.org/documentation/api)
   (titre, affiche, année), aperçu de la fiche avant ajout, ajout en un tap au suivi. Fiches en
   français en priorité, avec fallback sur l'anglais quand la traduction française manque.
