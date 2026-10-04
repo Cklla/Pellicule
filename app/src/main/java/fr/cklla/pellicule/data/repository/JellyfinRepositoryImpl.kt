@@ -3,6 +3,7 @@ package fr.cklla.pellicule.data.repository
 import fr.cklla.pellicule.data.local.JellyfinSessionStore
 import fr.cklla.pellicule.data.remote.jellyfin.JellyfinApi
 import fr.cklla.pellicule.data.remote.jellyfin.dto.JellyfinAuthRequestDto
+import fr.cklla.pellicule.domain.hasEpisodeAfterLastWatched
 import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.JellyfinPushHistoryResult
 import fr.cklla.pellicule.domain.model.JellyfinSession
@@ -13,6 +14,7 @@ import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
+import fr.cklla.pellicule.domain.statusAfterJellyfinPull
 import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -94,10 +96,8 @@ class JellyfinRepositoryImpl @Inject constructor(
         // être "dévu" par le pull, y compris quand Jellyfin répond "non vu" pour un item qu'il
         // retrouve bien (serveur réinstallé, historique de lecture reparti de zéro) — Jellyfin fait
         // foi pour ajouter du vu, jamais pour en retirer.
-        episodeRepository.replaceWatchedEpisodes(
-            media.id,
-            episodeRepository.observeWatchedEpisodes(media.id).first() + watchedFromJellyfin,
-        )
+        val knownWatched = episodeRepository.observeWatchedEpisodes(media.id).first() + watchedFromJellyfin
+        episodeRepository.replaceWatchedEpisodes(media.id, knownWatched)
 
         // Liste vide = pas d'info exploitable (série non trouvée côté Jellyfin, ou réponse
         // incomplète) : on laisse le statut local tel quel plutôt que de le remettre à "à voir".
@@ -114,8 +114,20 @@ class JellyfinRepositoryImpl @Inject constructor(
             else -> WatchStatus.A_VOIR
         }
         // Même principe que pour les épisodes ci-dessus : le pull ne fait jamais régresser un
-        // statut déjà plus avancé, il ne peut que le faire progresser.
-        val newStatus = maxOf(resolvedMedia.status, statusFromJellyfin)
+        // statut déjà plus avancé, il ne peut que le faire progresser. Seule exception : une série
+        // Vu dont le serveur expose des épisodes après le dernier vu (nouvelle saison ajoutée)
+        // repasse En cours. L'historique local fait partie du « dernier vu » : un serveur réinstallé
+        // sans historique ne déclenche donc rien, ses épisodes déjà vus localement restent derrière.
+        // Un épisode annoncé sans fichier (`Virtual`) n'est pas une nouveauté regardable.
+        val serverEpisodes = episodes
+            .filter { it.locationType != LOCATION_TYPE_VIRTUAL }
+            .mapNotNull { ep -> EpisodeKey(ep.seasonNumber ?: return@mapNotNull null, ep.episodeNumber ?: return@mapNotNull null) }
+            .toSet()
+        val newStatus = statusAfterJellyfinPull(
+            current = resolvedMedia.status,
+            fromJellyfin = statusFromJellyfin,
+            hasNewEpisodes = hasEpisodeAfterLastWatched(serverEpisodes, knownWatched),
+        )
         if (newStatus != resolvedMedia.status) {
             mediaRepository.updateMedia(resolvedMedia.copy(status = newStatus))
         }
@@ -308,5 +320,9 @@ class JellyfinRepositoryImpl @Inject constructor(
     private fun authHeader(token: String? = null) = buildString {
         append("MediaBrowser Client=\"Pellicule\", Device=\"Android\", DeviceId=\"${sessionStore.deviceId}\", Version=\"1.0\"")
         if (token != null) append(", Token=\"$token\"")
+    }
+
+    private companion object {
+        const val LOCATION_TYPE_VIRTUAL = "Virtual"
     }
 }

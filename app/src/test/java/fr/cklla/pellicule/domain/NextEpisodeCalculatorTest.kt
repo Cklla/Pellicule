@@ -9,6 +9,8 @@ import fr.cklla.pellicule.domain.model.TvShowInfo
 import fr.cklla.pellicule.domain.model.TvShowStatus
 import fr.cklla.pellicule.domain.model.WatchStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NextEpisodeCalculatorTest {
@@ -237,11 +239,73 @@ class NextEpisodeCalculatorTest {
     }
 
     @Test
-    fun `statut - cocher ne retrograde jamais un contenu Vu`() {
+    fun `statut - cocher un episode d'une nouvelle saison repasse un contenu Vu a En cours`() {
         assertEquals(
-            WatchStatus.VU,
-            statusAfterEpisodeChange(WatchStatus.VU, watched = true, next = NextEpisode.Available(key(1, 2), null)),
+            WatchStatus.EN_COURS,
+            statusAfterEpisodeChange(WatchStatus.VU, watched = true, next = NextEpisode.Available(key(2, 2), null)),
         )
+    }
+
+    @Test
+    fun `statut - cocher ne retrograde pas un contenu Vu quand il ne reste rien de diffuse apres`() {
+        listOf(
+            NextEpisode.Completed,
+            NextEpisode.UpToDate,
+            NextEpisode.Upcoming(key(2, 1), null, null),
+            NextEpisode.Unknown,
+        ).forEach { next ->
+            assertEquals(WatchStatus.VU, statusAfterEpisodeChange(WatchStatus.VU, watched = true, next = next))
+        }
+    }
+
+    @Test
+    fun `episode apres le dernier vu - une saison ajoutee apres la derniere vue est detectee`() {
+        val season1 = (1..3).map { key(1, it) }.toSet()
+        val server = season1 + setOf(key(2, 1), key(2, 2))
+
+        assertTrue(hasEpisodeAfterLastWatched(server, watched = season1))
+    }
+
+    @Test
+    fun `episode apres le dernier vu - rien apres l'historique n'est pas une nouveaute`() {
+        val season1 = (1..3).map { key(1, it) }.toSet()
+
+        assertFalse(hasEpisodeAfterLastWatched(season1, watched = season1))
+    }
+
+    @Test
+    fun `episode apres le dernier vu - sans aucun episode vu il n'y a pas de dernier`() {
+        assertFalse(hasEpisodeAfterLastWatched(setOf(key(1, 1), key(1, 2)), watched = emptySet()))
+    }
+
+    @Test
+    fun `episode apres le dernier vu - la saison 0 est ignoree des deux cotes`() {
+        assertFalse(hasEpisodeAfterLastWatched(setOf(key(1, 1), key(0, 1)), watched = setOf(key(1, 1))))
+        assertFalse(hasEpisodeAfterLastWatched(setOf(key(0, 1), key(0, 2)), watched = setOf(key(0, 1))))
+    }
+
+    @Test
+    fun `episode apres le dernier vu - un trou avant le dernier vu n'est pas une nouveaute`() {
+        assertFalse(hasEpisodeAfterLastWatched(setOf(key(1, 1), key(1, 2), key(1, 3)), watched = setOf(key(1, 1), key(1, 3))))
+    }
+
+    @Test
+    fun `statut apres pull - un Vu ne regresse pas sans nouveaute`() {
+        assertEquals(WatchStatus.VU, statusAfterJellyfinPull(WatchStatus.VU, WatchStatus.A_VOIR, hasNewEpisodes = false))
+        assertEquals(WatchStatus.VU, statusAfterJellyfinPull(WatchStatus.VU, WatchStatus.EN_COURS, hasNewEpisodes = false))
+    }
+
+    @Test
+    fun `statut apres pull - un Vu avec nouveaux episodes repasse En cours`() {
+        assertEquals(WatchStatus.EN_COURS, statusAfterJellyfinPull(WatchStatus.VU, WatchStatus.EN_COURS, hasNewEpisodes = true))
+        assertEquals(WatchStatus.EN_COURS, statusAfterJellyfinPull(WatchStatus.VU, WatchStatus.A_VOIR, hasNewEpisodes = true))
+    }
+
+    @Test
+    fun `statut apres pull - les autres statuts ne font que progresser`() {
+        assertEquals(WatchStatus.EN_COURS, statusAfterJellyfinPull(WatchStatus.A_VOIR, WatchStatus.EN_COURS, hasNewEpisodes = true))
+        assertEquals(WatchStatus.VU, statusAfterJellyfinPull(WatchStatus.EN_COURS, WatchStatus.VU, hasNewEpisodes = false))
+        assertEquals(WatchStatus.EN_COURS, statusAfterJellyfinPull(WatchStatus.EN_COURS, WatchStatus.A_VOIR, hasNewEpisodes = true))
     }
 
     @Test

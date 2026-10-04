@@ -17,6 +17,8 @@ data class JellyfinEpisodeDto(
     /** Numéro d'épisode au sein de la saison. */
     @Json(name = "IndexNumber") val episodeNumber: Int? = null,
     @Json(name = "UserData") val userData: JellyfinUserDataDto? = null,
+    /** `Virtual` pour un épisode annoncé par les métadonnées mais sans fichier sur le serveur. */
+    @Json(name = "LocationType") val locationType: String? = null,
 )
 
 /** Statut de lecture, présent aussi bien sur un épisode que sur un item de bibliothèque (film). */

@@ -549,6 +549,98 @@ class JellyfinRepositoryImplTest {
         }
     }
 
+    private fun episodes(season: Int, count: Int, playedUpTo: Int, locationType: String? = null) =
+        (1..count).map { number ->
+            JellyfinEpisodeDto(
+                id = "jf-$season-$number",
+                seasonNumber = season,
+                episodeNumber = number,
+                userData = JellyfinUserDataDto(played = number <= playedUpTo),
+                locationType = locationType,
+            )
+        }
+
+    /** Série Vu dont la saison 1 est cochée localement, face à un serveur décrit par [serverEpisodes]. */
+    private suspend fun pullOnWatchedSeries(
+        serverEpisodes: List<JellyfinEpisodeDto>,
+        localWatched: Set<EpisodeKey> = (1..9).map { EpisodeKey(1, it) }.toSet(),
+    ): WatchStatus? {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Arcane", type = MediaType.SERIE, status = WatchStatus.VU, tmdbId = 94605, jellyfinId = "jf-series-1"),
+        ) as Resource.Success).data
+        val episodeRepository = fakeEpisodeRepository()
+        localWatched.forEach { episodeRepository.setEpisodeWatched(mediaId, it, watched = true) }
+        val api = FakeJellyfinApi().apply { episodesBySeriesId = mapOf("jf-series-1" to serverEpisodes) }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        return mediaRepository.observeMediaById(mediaId).first()?.status
+    }
+
+    @Test
+    fun `syncTrackedSeries repasse En cours une serie Vu quand une nouvelle saison arrive sur le serveur`() = runTest {
+        val status = pullOnWatchedSeries(episodes(1, 9, playedUpTo = 9) + episodes(2, 9, playedUpTo = 0))
+
+        assertEquals(WatchStatus.EN_COURS, status)
+    }
+
+    @Test
+    fun `syncTrackedSeries coche le premier episode de la nouvelle saison et reste En cours`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Arcane", type = MediaType.SERIE, status = WatchStatus.VU, tmdbId = 94605, jellyfinId = "jf-series-1"),
+        ) as Resource.Success).data
+        val episodeRepository = fakeEpisodeRepository()
+        (1..9).forEach { episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, it), watched = true) }
+        val api = FakeJellyfinApi().apply {
+            episodesBySeriesId = mapOf("jf-series-1" to episodes(1, 9, playedUpTo = 9) + episodes(2, 9, playedUpTo = 1))
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertTrue(EpisodeKey(2, 1) in episodeRepository.observeWatchedEpisodes(mediaId).first())
+        assertEquals(WatchStatus.EN_COURS, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
+    fun `syncTrackedSeries repasse Vu la serie quand la nouvelle saison est vue en entier`() = runTest {
+        val status = pullOnWatchedSeries(episodes(1, 9, playedUpTo = 9) + episodes(2, 9, playedUpTo = 9))
+
+        assertEquals(WatchStatus.VU, status)
+    }
+
+    @Test
+    fun `syncTrackedSeries laisse Vu une serie marquee a la main sans aucun episode vu`() = runTest {
+        val status = pullOnWatchedSeries(
+            serverEpisodes = episodes(1, 9, playedUpTo = 0),
+            localWatched = emptySet(),
+        )
+
+        assertEquals(WatchStatus.VU, status)
+    }
+
+    @Test
+    fun `syncTrackedSeries ignore les episodes annonces sans fichier sur le serveur`() = runTest {
+        val status = pullOnWatchedSeries(
+            episodes(1, 9, playedUpTo = 9) + episodes(2, 9, playedUpTo = 0, locationType = "Virtual"),
+        )
+
+        assertEquals(WatchStatus.VU, status)
+    }
+
+    @Test
+    fun `syncTrackedSeries ignore la saison 0 des specials`() = runTest {
+        val specials = listOf(JellyfinEpisodeDto(id = "jf-0-1", seasonNumber = 0, episodeNumber = 1, userData = JellyfinUserDataDto(played = false)))
+
+        val status = pullOnWatchedSeries(episodes(1, 9, playedUpTo = 9) + specials)
+
+        assertEquals(WatchStatus.VU, status)
+    }
+
     @Test
     fun `syncTrackedMovies ne fait pas regresser un statut VU quand Jellyfin rapporte le film non vu`() = runTest {
         val mediaRepository = fakeMediaRepository(FakeMediaDao())
