@@ -92,9 +92,9 @@ optionnelle avec un serveur Jellyfin.
 |:---:|:---:|:---:|:---:|
 | <img src="screenshots/compte.png" width="200" alt="Compte"> | <img src="screenshots/statistiques.png" width="200" alt="Statistiques"> | <img src="screenshots/recap.png" width="200" alt="Récap annuel"> | <img src="screenshots/calendrier.png" width="200" alt="Calendrier"> |
 
-| Récap en images | | | |
-|:---:|:---:|:---:|:---:|
-| <img src="screenshots/recap-images.png" width="200" alt="Récap en images"> | | | |
+| Récap en images | Faits de l'année | Mosaïque |
+|:---:|:---:|:---:|
+| <img src="screenshots/recap-images.png" width="200" alt="Récap en images"> | <img src="screenshots/recap-faits.png" width="200" alt="Faits de l'année"> | <img src="screenshots/recap-mosaique.png" width="200" alt="Mosaïque du récap en images"> |
 
 ## Stack technique
 
