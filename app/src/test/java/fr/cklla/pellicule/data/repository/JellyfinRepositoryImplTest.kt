@@ -518,6 +518,38 @@ class JellyfinRepositoryImplTest {
     }
 
     @Test
+    fun `syncTrackedSeries ne fait regresser aucun statut apres reinstallation quand Jellyfin n'expose plus que la saison suivante non vue`() = runTest {
+        listOf(WatchStatus.EN_COURS, WatchStatus.VU).forEach { initialStatus ->
+            // Réinstallation : le contenu revient de Firestore avec son statut, mais sans
+            // `jellyfinId` ni épisode vu (`watched_episode` n'existe qu'en Room).
+            val mediaRepository = fakeMediaRepository(FakeMediaDao())
+            val mediaId = (mediaRepository.addMedia(
+                Media(title = "Fallout", type = MediaType.SERIE, status = initialStatus, tmdbId = 106379),
+            ) as Resource.Success).data
+            val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+
+            // La saison 1 a disparu du serveur : il ne reste que la saison 2, jamais commencée.
+            val api = FakeJellyfinApi().apply {
+                items = listOf(JellyfinItemDto(id = "jf-fallout", providerIds = mapOf("Tmdb" to "106379")))
+                episodesBySeriesId = mapOf(
+                    "jf-fallout" to listOf(
+                        JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 2, episodeNumber = 1, userData = JellyfinUserDataDto(played = false)),
+                        JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 2, episodeNumber = 2, userData = JellyfinUserDataDto(played = false)),
+                    ),
+                )
+            }
+            val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+            repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+            val updated = mediaRepository.observeMediaById(mediaId).first()
+            assertEquals(initialStatus, updated?.status)
+            assertEquals("jf-fallout", updated?.jellyfinId)
+            assertTrue(episodeRepository.observeWatchedEpisodes(mediaId).first().isEmpty())
+        }
+    }
+
+    @Test
     fun `syncTrackedMovies ne fait pas regresser un statut VU quand Jellyfin rapporte le film non vu`() = runTest {
         val mediaRepository = fakeMediaRepository(FakeMediaDao())
         val mediaId = (mediaRepository.addMedia(
