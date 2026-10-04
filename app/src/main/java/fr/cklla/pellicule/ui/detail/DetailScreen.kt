@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -104,6 +107,9 @@ fun DetailScreen(
     DetailContent(
         media = media,
         isInBacklog = uiState.isInBacklog,
+        canEditWatchedYear = uiState.canEditWatchedYear,
+        watchedYear = uiState.watchedYear,
+        watchedYearChoices = uiState.watchedYearChoices,
         synopsis = uiState.synopsis,
         watchAvailability = uiState.watchAvailability,
         nextAiring = uiState.nextAiring,
@@ -115,6 +121,7 @@ fun DetailScreen(
         episodesErrorMessage = uiState.episodesErrorMessage,
         onBackClick = onBackClick,
         onStatusSelected = viewModel::onStatusSelected,
+        onWatchedYearSelected = viewModel::onWatchedYearSelected,
         onRatingSelected = viewModel::onRatingSelected,
         onSeasonSelected = viewModel::onSeasonSelected,
         onEpisodeWatchedToggled = viewModel::onEpisodeWatchedToggled,
@@ -129,6 +136,9 @@ fun DetailScreen(
 private fun DetailContent(
     media: Media,
     isInBacklog: Boolean,
+    canEditWatchedYear: Boolean,
+    watchedYear: Int?,
+    watchedYearChoices: List<Int>,
     synopsis: String?,
     watchAvailability: WatchAvailability?,
     nextAiring: NextAiring?,
@@ -140,6 +150,7 @@ private fun DetailContent(
     episodesErrorMessage: String?,
     onBackClick: () -> Unit,
     onStatusSelected: (WatchStatus) -> Unit,
+    onWatchedYearSelected: (Int) -> Unit,
     onRatingSelected: (Int?) -> Unit,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeWatchedToggled: (EpisodeUiModel) -> Unit,
@@ -149,6 +160,7 @@ private fun DetailContent(
     modifier: Modifier = Modifier,
 ) {
     var showRemoveConfirm by rememberSaveable { mutableStateOf(false) }
+    var showWatchedYearDialog by rememberSaveable { mutableStateOf(false) }
     // Repasser un contenu "Vu" à un autre statut démarque aussi ce qu'il efface sur Jellyfin
     // (épisodes ou film, voir `DetailViewModel.onStatusSelected`) : effet visible sur le serveur
     // réel et les autres clients (Moonfin), donc confirmation avant d'agir, comme pour le retrait.
@@ -203,6 +215,9 @@ private fun DetailContent(
             if (isInBacklog) {
                 StatusSection(
                     selected = media.status,
+                    showWatchedYear = canEditWatchedYear,
+                    watchedYear = watchedYear,
+                    onWatchedYearClick = { showWatchedYearDialog = true },
                     onStatusSelected = { status ->
                         if (media.status == WatchStatus.VU && status != WatchStatus.VU) {
                             pendingStatusReset = status
@@ -237,6 +252,19 @@ private fun DetailContent(
                 onRemoveMedia()
             },
             onDismiss = { showRemoveConfirm = false },
+        )
+    }
+
+    // Le dialogue ne survit pas à une sortie du statut Vu (la ligne qui l'ouvre disparaît alors).
+    if (showWatchedYearDialog && canEditWatchedYear) {
+        WatchedYearDialog(
+            years = watchedYearChoices,
+            selectedYear = watchedYear,
+            onYearSelected = { year ->
+                showWatchedYearDialog = false
+                onWatchedYearSelected(year)
+            },
+            onDismiss = { showWatchedYearDialog = false },
         )
     }
 
@@ -408,7 +436,13 @@ internal fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun StatusSection(selected: WatchStatus, onStatusSelected: (WatchStatus) -> Unit) {
+private fun StatusSection(
+    selected: WatchStatus,
+    showWatchedYear: Boolean,
+    watchedYear: Int?,
+    onWatchedYearClick: () -> Unit,
+    onStatusSelected: (WatchStatus) -> Unit,
+) {
     Column {
         SectionLabel(stringResource(R.string.detail_status_label))
         Spacer(modifier = Modifier.height(10.dp))
@@ -420,6 +454,46 @@ private fun StatusSection(selected: WatchStatus, onStatusSelected: (WatchStatus)
             WatchStatus.entries.forEach { status ->
                 StatusPill(status = status, selected = status == selected, onClick = { onStatusSelected(status) })
             }
+        }
+        if (showWatchedYear) {
+            WatchedYearRow(watchedYear = watchedYear, onClick = onWatchedYearClick)
+        }
+    }
+}
+
+@Composable
+private fun WatchedYearRow(watchedYear: Int?, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = if (watchedYear != null) {
+                stringResource(R.string.detail_watched_year_known, watchedYear)
+            } else {
+                stringResource(R.string.detail_watched_year_unknown)
+            },
+            style = PelliculeTextStyles.cardTitle,
+            color = if (watchedYear != null) TextPrimary else TextMuted,
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(start = 16.dp),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            Text(
+                text = stringResource(
+                    if (watchedYear != null) R.string.detail_watched_year_edit else R.string.detail_watched_year_define,
+                ),
+                style = PelliculeTextStyles.linkLabel.copy(textDecoration = TextDecoration.Underline),
+                color = TextTertiary,
+            )
         }
     }
 }
@@ -685,6 +759,65 @@ private fun StatusResetConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Uni
     )
 }
 
+@Composable
+private fun WatchedYearDialog(
+    years: List<Int>,
+    selectedYear: Int?,
+    onYearSelected: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // La liste s'ouvre sur l'année enregistrée (avec deux années au-dessus pour le contexte) plutôt
+    // qu'en haut : pour un film vu en 2018, il ne faut pas avoir à faire défiler depuis aujourd'hui.
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = (years.indexOf(selectedYear) - 2).coerceAtLeast(0),
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceCard,
+        titleContentColor = TextPrimary,
+        textContentColor = TextTertiary,
+        title = { Text(stringResource(R.string.detail_watched_year_dialog_title)) },
+        text = {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .heightIn(max = 320.dp)
+                    .selectableGroup(),
+            ) {
+                items(years, key = { it }) { year ->
+                    WatchedYearItem(year = year, selected = year == selectedYear, onClick = { onYearSelected(year) })
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.detail_watched_year_dialog_cancel), color = TextTertiary)
+            }
+        },
+    )
+}
+
+@Composable
+private fun WatchedYearItem(year: Int, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .then(if (selected) Modifier.background(AccentPurpleMuted) else Modifier)
+            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            text = year.toString(),
+            style = PelliculeTextStyles.cardTitle,
+            color = if (selected) TextPrimary else TextTertiary,
+        )
+    }
+}
+
 @Preview(showBackground = true, backgroundColor = 0xFF0A0812)
 @Composable
 private fun DetailContentPreview() {
@@ -692,7 +825,7 @@ private fun DetailContentPreview() {
         id = "1",
         title = "Perfect Blue",
         type = MediaType.ANIME,
-        status = WatchStatus.EN_COURS,
+        status = WatchStatus.VU,
         releaseYear = 1997,
     )
     val episodes = listOf(
@@ -703,6 +836,9 @@ private fun DetailContentPreview() {
         DetailContent(
             media = media,
             isInBacklog = true,
+            canEditWatchedYear = true,
+            watchedYear = 2026,
+            watchedYearChoices = (2026 downTo 1997).toList(),
             synopsis = "Une danseuse d'un groupe de pop japonais se lance dans une carrière d'actrice…",
             watchAvailability = WatchAvailability.Known(
                 streaming = listOf(WatchProvider(id = 8, name = "Netflix", logoUrl = null)),
@@ -718,6 +854,7 @@ private fun DetailContentPreview() {
             episodesErrorMessage = null,
             onBackClick = {},
             onStatusSelected = {},
+            onWatchedYearSelected = {},
             onRatingSelected = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
@@ -736,6 +873,9 @@ private fun DetailContentApercuPreview() {
         DetailContent(
             media = media,
             isInBacklog = false,
+            canEditWatchedYear = false,
+            watchedYear = null,
+            watchedYearChoices = emptyList(),
             synopsis = null,
             watchAvailability = WatchAvailability.Unknown,
             nextAiring = null,
@@ -747,6 +887,7 @@ private fun DetailContentApercuPreview() {
             episodesErrorMessage = null,
             onBackClick = {},
             onStatusSelected = {},
+            onWatchedYearSelected = {},
             onRatingSelected = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},

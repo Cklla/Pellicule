@@ -56,6 +56,12 @@
     <string name="detail_status_reset_confirm_message">La progression détaillée (épisodes vus, ou lecture du film) sera effacée, y compris sur Jellyfin et les autres appareils connectés.</string>
     <string name="detail_status_reset_confirm_confirm">Continuer</string>
     <string name="detail_status_reset_confirm_cancel">Annuler</string>
+    <string name="detail_watched_year_known">Vu en %1$d</string>
+    <string name="detail_watched_year_unknown">Année de visionnage inconnue</string>
+    <string name="detail_watched_year_edit">Modifier</string>
+    <string name="detail_watched_year_define">Définir</string>
+    <string name="detail_watched_year_dialog_title">Année de visionnage</string>
+    <string name="detail_watched_year_dialog_cancel">Annuler</string>
     <string name="detail_rating_label">Note perso</string>
     <string name="detail_rating_star_content_description">Donner une note de %1$d sur 5</string>
     <string name="detail_add_action">Ajouter au suivi</string>
