@@ -12,6 +12,9 @@ import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.MediaRepository
+import fr.cklla.pellicule.domain.util.TimeSource
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
@@ -530,6 +533,64 @@ class JellyfinRepositoryImplTest {
         repository.syncTrackedMovies(mediaRepository.observeMedia().first())
 
         assertEquals(WatchStatus.VU, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    // 2026-10-04 à midi UTC.
+    private val fixedTimeSource = object : TimeSource {
+        override fun nowMillis() = ZonedDateTime.of(2026, 10, 4, 12, 0, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli()
+        override val zone = ZoneOffset.UTC
+    }
+
+    private val july2024 = ZonedDateTime.of(2024, 7, 1, 12, 0, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli()
+
+    @Test
+    fun `un pull sur une serie Vu dont l'annee a ete choisie ne modifie pas watchedAt`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao(), timeSource = fixedTimeSource)
+        // Sans jellyfinId : le pull résout l'id puis réécrit le contenu, c'est le chemin qui passe
+        // par `updateMedia` et donc par la dérivation de `watchedAt`.
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Arcane", type = MediaType.SERIE, status = WatchStatus.VU, tmdbId = 94605),
+        ) as Resource.Success).data
+        mediaRepository.setWatchedYear(mediaId, 2024)
+        assertEquals(july2024, mediaRepository.observeMediaById(mediaId).first()?.watchedAt)
+        val api = FakeJellyfinApi().apply {
+            items = listOf(JellyfinItemDto(id = "jf-series-1", providerIds = mapOf("Tmdb" to "94605")))
+            episodesBySeriesId = mapOf(
+                "jf-series-1" to listOf(
+                    JellyfinEpisodeDto(id = "jf-ep-1", seasonNumber = 1, episodeNumber = 1, userData = JellyfinUserDataDto(played = true)),
+                    JellyfinEpisodeDto(id = "jf-ep-2", seasonNumber = 1, episodeNumber = 2, userData = JellyfinUserDataDto(played = true)),
+                ),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        val media = mediaRepository.observeMediaById(mediaId).first()
+        assertEquals("jf-series-1", media?.jellyfinId)
+        assertEquals(WatchStatus.VU, media?.status)
+        assertEquals(july2024, media?.watchedAt)
+    }
+
+    @Test
+    fun `un pull sur un film Vu dont l'annee a ete choisie ne modifie pas watchedAt`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao(), timeSource = fixedTimeSource)
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.VU, tmdbId = 438631),
+        ) as Resource.Success).data
+        mediaRepository.setWatchedYear(mediaId, 2024)
+        val api = FakeJellyfinApi().apply {
+            items = listOf(
+                JellyfinItemDto(id = "jf-movie-1", providerIds = mapOf("Tmdb" to "438631"), userData = JellyfinUserDataDto(played = true)),
+            )
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedMovies(mediaRepository.observeMedia().first())
+
+        val media = mediaRepository.observeMediaById(mediaId).first()
+        assertEquals("jf-movie-1", media?.jellyfinId)
+        assertEquals(july2024, media?.watchedAt)
     }
 
     @Test
