@@ -161,6 +161,49 @@
     <string name="recap_media_title_serie">Séries vues en %1$d</string>
     <string name="recap_media_title_anime">Animes vus en %1$d</string>
     <string name="recap_media_empty">Aucun contenu à afficher.</string>
+    <string name="recap_story_button">Voir mon récap en images</string>
+
+    <!-- Récap en images -->
+    <string name="recap_story_close">Fermer le récap en images</string>
+    <string name="recap_story_progress">Slide %1$d sur %2$d</string>
+    <string name="recap_story_empty">Aucun contenu vu en %1$d pour le moment.</string>
+    <plurals name="recap_story_total_title">
+        <item quantity="one">contenu vu en %1$d</item>
+        <item quantity="other">contenus vus en %1$d</item>
+    </plurals>
+    <string name="recap_story_total_kicker">ton année en un coup d\'œil</string>
+    <string name="recap_story_favorites_kicker">tes coups de cœur</string>
+    <string name="recap_story_type_title_film">Tes films</string>
+    <string name="recap_story_type_title_serie">Tes séries</string>
+    <string name="recap_story_type_title_anime">Tes anime</string>
+    <plurals name="recap_story_type_count_film">
+        <item quantity="one">%1$d film vu en %2$d</item>
+        <item quantity="other">%1$d films vus en %2$d</item>
+    </plurals>
+    <plurals name="recap_story_type_count_serie">
+        <item quantity="one">%1$d série vue en %2$d</item>
+        <item quantity="other">%1$d séries vues en %2$d</item>
+    </plurals>
+    <plurals name="recap_story_type_count_anime">
+        <item quantity="one">%1$d anime vu en %2$d</item>
+        <item quantity="other">%1$d anime vus en %2$d</item>
+    </plurals>
+    <string name="recap_story_rating_content_description">Note : %1$d sur 5</string>
+    <string name="recap_story_facts_title">Les faits de l\'année</string>
+    <string name="recap_story_fact_first">Premier de l\'année</string>
+    <string name="recap_story_fact_last">Dernier de l\'année</string>
+    <string name="recap_story_fact_busiest_month">Mois le plus chargé</string>
+    <string name="recap_story_fact_oldest">Le plus ancien</string>
+    <plurals name="recap_story_fact_month_count">
+        <item quantity="one">%1$d contenu vu</item>
+        <item quantity="other">%1$d contenus vus</item>
+    </plurals>
+    <string name="recap_story_fact_oldest_released">sorti en %1$d</string>
+    <string name="recap_story_mosaic_title">Tout ce que tu as vu</string>
+    <plurals name="recap_story_mosaic_subtitle">
+        <item quantity="one">%1$d contenu en %2$d, dans l\'ordre où tu les as vus</item>
+        <item quantity="other">%1$d contenus en %2$d, dans l\'ordre où tu les as vus</item>
+    </plurals>
     <string name="notification_channel_recap_name">Récap annuel</string>
     <string name="notification_channel_recap_description">Prévient quand le bilan de l\'année devient disponible.</string>
     <string name="notification_recap_title">Ton récap %1$d est prêt</string>

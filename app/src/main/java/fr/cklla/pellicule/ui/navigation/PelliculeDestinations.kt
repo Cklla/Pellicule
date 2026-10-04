@@ -26,8 +26,11 @@ object PelliculeDestinations {
     const val RECAP_MEDIA_TYPE_ALL = "TOUS"
     const val RECAP = "recap/{$RECAP_ARG_YEAR}"
     const val RECAP_MEDIA = "recap/{$RECAP_ARG_YEAR}/media/{$RECAP_ARG_TYPE}"
+    const val RECAP_STORY = "recap/{$RECAP_ARG_YEAR}/story"
 
     fun recapRoute(year: Int) = "recap/$year"
+
+    fun recapStoryRoute(year: Int) = "recap/$year/story"
 
     fun recapMediaRoute(year: Int, type: MediaType?) = "recap/$year/media/${type?.name ?: RECAP_MEDIA_TYPE_ALL}"
 

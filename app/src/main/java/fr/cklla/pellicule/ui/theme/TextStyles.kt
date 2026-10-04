@@ -145,6 +145,14 @@ object PelliculeTextStyles {
         fontSize = 26.sp,
     )
 
+    // Gros chiffre de la slide « Total » du récap en images.
+    val recapHero = TextStyle(
+        fontFamily = FrauncesItalic,
+        fontWeight = FontWeight.SemiBold,
+        fontStyle = FontStyle.Italic,
+        fontSize = 88.sp,
+    )
+
     val donutLabel = TextStyle(
         fontFamily = InterFamily,
         fontSize = 10.5.sp,
