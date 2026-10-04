@@ -3,6 +3,7 @@ package fr.cklla.pellicule.data.repository
 import fr.cklla.pellicule.data.local.JellyfinSessionStore
 import fr.cklla.pellicule.data.remote.jellyfin.JellyfinApi
 import fr.cklla.pellicule.data.remote.jellyfin.dto.JellyfinAuthRequestDto
+import fr.cklla.pellicule.domain.hasEpisodeAfterLastWatched
 import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.JellyfinPushHistoryResult
 import fr.cklla.pellicule.domain.model.JellyfinSession
@@ -13,6 +14,7 @@ import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
+import fr.cklla.pellicule.domain.statusAfterJellyfinPull
 import javax.inject.Inject
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -68,20 +70,23 @@ class JellyfinRepositoryImpl @Inject constructor(
     override suspend fun syncTrackedSeries(items: List<Media>) {
         val current = session.value ?: return
         items.filter { it.type == MediaType.SERIE || it.type == MediaType.ANIME }
-            .forEach { media -> runCatching { syncSeries(current, media) }.onFailure(::disconnectIfUnauthorized) }
+            .forEach { media ->
+                runCatching { syncSeries(current, media) }.onFailure { handleFailure("synchro de la série « ${media.title} »", it) }
+            }
     }
 
     private suspend fun syncSeries(current: JellyfinSession, media: Media) {
-        val jellyfinId = resolveJellyfinId(current, media) ?: return
-        // `media` peut avoir un `jellyfinId` pas encore à jour (résolu à l'instant par
-        // `resolveJellyfinId`) : on repart de cette version pour ne pas écraser la valeur qu'on
-        // vient de persister lors de la mise à jour du statut plus bas.
+        // L'id qui a réellement répondu : après une ré-résolution (voir `withJellyfinSeriesId`), ce
+        // n'est plus celui de `media`. On repart de cette version pour ne pas écraser la valeur
+        // qu'on vient de persister lors de la mise à jour du statut plus bas.
+        val (jellyfinId, episodes) = withJellyfinSeriesId(current, media) { id ->
+            id to jellyfinApi.getSeriesEpisodes(
+                url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, id),
+                authHeader = authHeader(current.accessToken),
+                userId = current.userId,
+            ).items
+        } ?: return
         val resolvedMedia = media.copy(jellyfinId = jellyfinId)
-        val episodes = jellyfinApi.getSeriesEpisodes(
-            url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
-            authHeader = authHeader(current.accessToken),
-            userId = current.userId,
-        ).items
         val watchedFromJellyfin = episodes
             .filter { it.userData?.played == true }
             .mapNotNull { ep ->
@@ -94,10 +99,8 @@ class JellyfinRepositoryImpl @Inject constructor(
         // être "dévu" par le pull, y compris quand Jellyfin répond "non vu" pour un item qu'il
         // retrouve bien (serveur réinstallé, historique de lecture reparti de zéro) — Jellyfin fait
         // foi pour ajouter du vu, jamais pour en retirer.
-        episodeRepository.replaceWatchedEpisodes(
-            media.id,
-            episodeRepository.observeWatchedEpisodes(media.id).first() + watchedFromJellyfin,
-        )
+        val knownWatched = episodeRepository.observeWatchedEpisodes(media.id).first() + watchedFromJellyfin
+        episodeRepository.replaceWatchedEpisodes(media.id, knownWatched)
 
         // Liste vide = pas d'info exploitable (série non trouvée côté Jellyfin, ou réponse
         // incomplète) : on laisse le statut local tel quel plutôt que de le remettre à "à voir".
@@ -114,8 +117,20 @@ class JellyfinRepositoryImpl @Inject constructor(
             else -> WatchStatus.A_VOIR
         }
         // Même principe que pour les épisodes ci-dessus : le pull ne fait jamais régresser un
-        // statut déjà plus avancé, il ne peut que le faire progresser.
-        val newStatus = maxOf(resolvedMedia.status, statusFromJellyfin)
+        // statut déjà plus avancé, il ne peut que le faire progresser. Seule exception : une série
+        // Vu dont le serveur expose des épisodes après le dernier vu (nouvelle saison ajoutée)
+        // repasse En cours. L'historique local fait partie du « dernier vu » : un serveur réinstallé
+        // sans historique ne déclenche donc rien, ses épisodes déjà vus localement restent derrière.
+        // Un épisode annoncé sans fichier (`Virtual`) n'est pas une nouveauté regardable.
+        val serverEpisodes = episodes
+            .filter { it.locationType != LOCATION_TYPE_VIRTUAL }
+            .mapNotNull { ep -> EpisodeKey(ep.seasonNumber ?: return@mapNotNull null, ep.episodeNumber ?: return@mapNotNull null) }
+            .toSet()
+        val newStatus = statusAfterJellyfinPull(
+            current = resolvedMedia.status,
+            fromJellyfin = statusFromJellyfin,
+            hasNewEpisodes = hasEpisodeAfterLastWatched(serverEpisodes, knownWatched),
+        )
         if (newStatus != resolvedMedia.status) {
             mediaRepository.updateMedia(resolvedMedia.copy(status = newStatus))
         }
@@ -151,18 +166,19 @@ class JellyfinRepositoryImpl @Inject constructor(
                     mediaRepository.updateMedia(media.copy(jellyfinId = item.id, status = newStatus))
                 }
             }
-        }.onFailure(::disconnectIfUnauthorized)
+        }.onFailure { handleFailure("synchro des films", it) }
     }
 
     override suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean) {
         val current = session.value ?: return
         runCatching {
-            val jellyfinId = resolveJellyfinId(current, media) ?: return
-            val episodeItemId = jellyfinApi.getSeriesEpisodes(
-                url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
-                authHeader = authHeader(current.accessToken),
-                userId = current.userId,
-            ).items.firstOrNull { it.seasonNumber == seasonNumber && it.episodeNumber == episodeNumber }?.id ?: return
+            val episodeItemId = withJellyfinSeriesId(current, media) { jellyfinId ->
+                jellyfinApi.getSeriesEpisodes(
+                    url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
+                    authHeader = authHeader(current.accessToken),
+                    userId = current.userId,
+                ).items.firstOrNull { it.seasonNumber == seasonNumber && it.episodeNumber == episodeNumber }?.id
+            } ?: return
 
             val url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, episodeItemId)
             if (watched) {
@@ -170,7 +186,7 @@ class JellyfinRepositoryImpl @Inject constructor(
             } else {
                 jellyfinApi.markUnplayed(url, authHeader(current.accessToken))
             }
-        }.onFailure(::disconnectIfUnauthorized)
+        }.onFailure { handleFailure("envoi de l'épisode vers Jellyfin", it) }
     }
 
     override suspend fun pushMovieWatched(media: Media, watched: Boolean) {
@@ -193,32 +209,33 @@ class JellyfinRepositoryImpl @Inject constructor(
             } else {
                 jellyfinApi.markUnplayed(url, authHeader(current.accessToken))
             }
-        }.onFailure(::disconnectIfUnauthorized)
+        }.onFailure { handleFailure("envoi du film vers Jellyfin", it) }
     }
 
     override suspend fun pushSeriesUnwatched(media: Media) {
         val current = session.value ?: return
         runCatching {
-            val jellyfinId = resolveJellyfinId(current, media) ?: return
-            jellyfinApi.markUnplayed(
-                url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, jellyfinId),
-                authHeader = authHeader(current.accessToken),
-            )
-            // Filet de sécurité : si le serveur n'a pas propagé le démarquage à ses épisodes, on
-            // rattrape uniquement ceux encore signalés vus — donc aucun appel dans le cas normal.
-            jellyfinApi.getSeriesEpisodes(
-                url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
-                authHeader = authHeader(current.accessToken),
-                userId = current.userId,
-            ).items
-                .filter { it.userData?.played == true }
-                .forEach { episode ->
-                    jellyfinApi.markUnplayed(
-                        url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, episode.id),
-                        authHeader = authHeader(current.accessToken),
-                    )
-                }
-        }.onFailure(::disconnectIfUnauthorized)
+            withJellyfinSeriesId(current, media) { jellyfinId ->
+                jellyfinApi.markUnplayed(
+                    url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, jellyfinId),
+                    authHeader = authHeader(current.accessToken),
+                )
+                // Filet de sécurité : si le serveur n'a pas propagé le démarquage à ses épisodes, on
+                // rattrape uniquement ceux encore signalés vus — donc aucun appel dans le cas normal.
+                jellyfinApi.getSeriesEpisodes(
+                    url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
+                    authHeader = authHeader(current.accessToken),
+                    userId = current.userId,
+                ).items
+                    .filter { it.userData?.played == true }
+                    .forEach { episode ->
+                        jellyfinApi.markUnplayed(
+                            url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, episode.id),
+                            authHeader = authHeader(current.accessToken),
+                        )
+                    }
+            }
+        }.onFailure { handleFailure("démarquage de la série sur Jellyfin", it) }
     }
 
     override suspend fun pushWatchedHistory(items: List<Media>): JellyfinPushHistoryResult {
@@ -244,20 +261,21 @@ class JellyfinRepositoryImpl @Inject constructor(
                     jellyfinApi.markPlayed(JellyfinApi.playedItemUrl(current.serverUrl, current.userId, item.id), authHeader(current.accessToken))
                     moviesMarkedPlayed++
                 }
-            }.onFailure(::disconnectIfUnauthorized)
+            }.onFailure { handleFailure("renvoi de l'historique des films", it) }
         }
 
         items.filter { it.type == MediaType.SERIE || it.type == MediaType.ANIME }
             .forEach seriesLoop@{ media ->
                 runCatching {
-                    val jellyfinId = resolveJellyfinId(current, media) ?: return@seriesLoop
                     val locallyWatched = episodeRepository.observeWatchedEpisodes(media.id).first()
                     if (locallyWatched.isEmpty()) return@seriesLoop
-                    val jellyfinEpisodes = jellyfinApi.getSeriesEpisodes(
-                        url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
-                        authHeader = authHeader(current.accessToken),
-                        userId = current.userId,
-                    ).items
+                    val jellyfinEpisodes = withJellyfinSeriesId(current, media) { jellyfinId ->
+                        jellyfinApi.getSeriesEpisodes(
+                            url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
+                            authHeader = authHeader(current.accessToken),
+                            userId = current.userId,
+                        ).items
+                    } ?: return@seriesLoop
                     jellyfinEpisodes.forEach episodeLoop@{ ep ->
                         val season = ep.seasonNumber ?: return@episodeLoop
                         val episodeNumber = ep.episodeNumber ?: return@episodeLoop
@@ -266,26 +284,32 @@ class JellyfinRepositoryImpl @Inject constructor(
                         jellyfinApi.markPlayed(JellyfinApi.playedItemUrl(current.serverUrl, current.userId, ep.id), authHeader(current.accessToken))
                         episodesMarkedPlayed++
                     }
-                }.onFailure(::disconnectIfUnauthorized)
+                }.onFailure { handleFailure("renvoi de l'historique d'une série", it) }
             }
 
         return JellyfinPushHistoryResult(moviesMarkedPlayed, episodesMarkedPlayed)
     }
 
     /**
-     * Un 401 sur un appel authentifié signifie que le token n'est plus valide côté serveur (révoqué,
-     * expiré) : on efface la session locale pour repasser l'app en "déconnecté" plutôt que de
-     * continuer à échouer silencieusement à chaque synchro sans jamais le signaler à l'utilisateur.
+     * Point d'arrivée de tous les échecs de synchro, qui sont volontairement avalés (un réseau ou un
+     * serveur indisponible ne doit jamais gêner le suivi local) : on les journalise pour qu'ils restent
+     * diagnostiquables. Un 401 sur un appel authentifié signifie en plus que le token n'est plus valide
+     * côté serveur (révoqué, expiré) : on efface la session locale pour repasser l'app en
+     * "déconnecté" plutôt que de continuer à échouer à chaque synchro sans jamais le signaler.
      */
-    private fun disconnectIfUnauthorized(error: Throwable) {
+    private fun handleFailure(operation: String, error: Throwable) {
+        SyncLog.warn("Jellyfin : $operation en échec", error)
         if (error is HttpException && error.code() == 401) {
             sessionStore.clear()
         }
     }
 
-    /** Résout `Media.jellyfinId` à partir du `tmdbId`, et le persiste pour éviter de re-résoudre à chaque synchro. */
-    private suspend fun resolveJellyfinId(current: JellyfinSession, media: Media): String? {
-        media.jellyfinId?.let { return it }
+    /**
+     * Résout `Media.jellyfinId` à partir du `tmdbId`, et le persiste pour éviter de re-résoudre à chaque
+     * synchro. [refresh] ignore l'id déjà connu : sert quand celui-ci n'existe plus sur le serveur.
+     */
+    private suspend fun resolveJellyfinId(current: JellyfinSession, media: Media, refresh: Boolean = false): String? {
+        if (!refresh) media.jellyfinId?.let { return it }
         val tmdbId = media.tmdbId ?: return null
 
         val items = jellyfinApi.getItems(
@@ -294,8 +318,33 @@ class JellyfinRepositoryImpl @Inject constructor(
         ).items
         val resolvedId = items.firstOrNull { it.providerIds?.get("Tmdb") == tmdbId.toString() }?.id ?: return null
 
-        mediaRepository.updateMedia(media.copy(jellyfinId = resolvedId))
+        if (resolvedId != media.jellyfinId) {
+            mediaRepository.updateMedia(media.copy(jellyfinId = resolvedId))
+        }
         return resolvedId
+    }
+
+    /**
+     * Exécute [block] avec l'id Jellyfin de la série. Le serveur peut recréer l'item d'une série (nouvelle
+     * saison ajoutée, dossier déplacé, bibliothèque rescannée) : l'ancien id répond alors 404 pour
+     * toujours, et sans reprise la synchro de cette série échouerait en silence à chaque lancement.
+     * Sur un 404 avec un id déjà connu, l'id est donc ré-résolu par le `tmdbId`, persisté, et [block]
+     * rejoué une fois. Renvoie `null` si la série n'est pas retrouvée sur le serveur.
+     */
+    private suspend fun <T> withJellyfinSeriesId(
+        current: JellyfinSession,
+        media: Media,
+        block: suspend (jellyfinId: String) -> T,
+    ): T? {
+        val jellyfinId = resolveJellyfinId(current, media) ?: return null
+        return try {
+            block(jellyfinId)
+        } catch (error: HttpException) {
+            if (error.code() != 404 || media.jellyfinId == null) throw error
+            val freshId = resolveJellyfinId(current, media, refresh = true)?.takeIf { it != jellyfinId } ?: throw error
+            SyncLog.info("Jellyfin : id de « ${media.title} » périmé (404), remplacé par celui retrouvé via TMDB")
+            block(freshId)
+        }
     }
 
     /** Une adresse exploitable doit porter un schéma http(s) explicite et un hôte non vide. */
@@ -308,5 +357,9 @@ class JellyfinRepositoryImpl @Inject constructor(
     private fun authHeader(token: String? = null) = buildString {
         append("MediaBrowser Client=\"Pellicule\", Device=\"Android\", DeviceId=\"${sessionStore.deviceId}\", Version=\"1.0\"")
         if (token != null) append(", Token=\"$token\"")
+    }
+
+    private companion object {
+        const val LOCATION_TYPE_VIRTUAL = "Virtual"
     }
 }

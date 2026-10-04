@@ -22,6 +22,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.HttpException
@@ -33,6 +34,18 @@ private fun unauthorizedException() =
 class JellyfinRepositoryImplTest {
 
     private val session = JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token-abc")
+
+    private val logged = mutableListOf<Triple<Int, String, Throwable?>>()
+    private val defaultSink = SyncLog.sink
+
+    init {
+        SyncLog.sink = { priority, message, error -> logged += Triple(priority, message, error) }
+    }
+
+    @After
+    fun restoreSyncLog() {
+        SyncLog.sink = defaultSink
+    }
 
     private fun repository(
         api: FakeJellyfinApi = FakeJellyfinApi(),
@@ -547,6 +560,266 @@ class JellyfinRepositoryImplTest {
             assertEquals("jf-fallout", updated?.jellyfinId)
             assertTrue(episodeRepository.observeWatchedEpisodes(mediaId).first().isEmpty())
         }
+    }
+
+    private fun episodes(season: Int, count: Int, playedUpTo: Int, locationType: String? = null) =
+        (1..count).map { number ->
+            JellyfinEpisodeDto(
+                id = "jf-$season-$number",
+                seasonNumber = season,
+                episodeNumber = number,
+                userData = JellyfinUserDataDto(played = number <= playedUpTo),
+                locationType = locationType,
+            )
+        }
+
+    /** Série Vu dont la saison 1 est cochée localement, face à un serveur décrit par [serverEpisodes]. */
+    private suspend fun pullOnWatchedSeries(
+        serverEpisodes: List<JellyfinEpisodeDto>,
+        localWatched: Set<EpisodeKey> = (1..9).map { EpisodeKey(1, it) }.toSet(),
+    ): WatchStatus? {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Arcane", type = MediaType.SERIE, status = WatchStatus.VU, tmdbId = 94605, jellyfinId = "jf-series-1"),
+        ) as Resource.Success).data
+        val episodeRepository = fakeEpisodeRepository()
+        localWatched.forEach { episodeRepository.setEpisodeWatched(mediaId, it, watched = true) }
+        val api = FakeJellyfinApi().apply { episodesBySeriesId = mapOf("jf-series-1" to serverEpisodes) }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        return mediaRepository.observeMediaById(mediaId).first()?.status
+    }
+
+    @Test
+    fun `syncTrackedSeries repasse En cours une serie Vu quand une nouvelle saison arrive sur le serveur`() = runTest {
+        val status = pullOnWatchedSeries(episodes(1, 9, playedUpTo = 9) + episodes(2, 9, playedUpTo = 0))
+
+        assertEquals(WatchStatus.EN_COURS, status)
+    }
+
+    @Test
+    fun `syncTrackedSeries coche le premier episode de la nouvelle saison et reste En cours`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (mediaRepository.addMedia(
+            Media(title = "Arcane", type = MediaType.SERIE, status = WatchStatus.VU, tmdbId = 94605, jellyfinId = "jf-series-1"),
+        ) as Resource.Success).data
+        val episodeRepository = fakeEpisodeRepository()
+        (1..9).forEach { episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, it), watched = true) }
+        val api = FakeJellyfinApi().apply {
+            episodesBySeriesId = mapOf("jf-series-1" to episodes(1, 9, playedUpTo = 9) + episodes(2, 9, playedUpTo = 1))
+        }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertTrue(EpisodeKey(2, 1) in episodeRepository.observeWatchedEpisodes(mediaId).first())
+        assertEquals(WatchStatus.EN_COURS, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
+    fun `syncTrackedSeries repasse Vu la serie quand la nouvelle saison est vue en entier`() = runTest {
+        val status = pullOnWatchedSeries(episodes(1, 9, playedUpTo = 9) + episodes(2, 9, playedUpTo = 9))
+
+        assertEquals(WatchStatus.VU, status)
+    }
+
+    @Test
+    fun `syncTrackedSeries laisse Vu une serie marquee a la main sans aucun episode vu`() = runTest {
+        val status = pullOnWatchedSeries(
+            serverEpisodes = episodes(1, 9, playedUpTo = 0),
+            localWatched = emptySet(),
+        )
+
+        assertEquals(WatchStatus.VU, status)
+    }
+
+    @Test
+    fun `syncTrackedSeries ignore les episodes annonces sans fichier sur le serveur`() = runTest {
+        val status = pullOnWatchedSeries(
+            episodes(1, 9, playedUpTo = 9) + episodes(2, 9, playedUpTo = 0, locationType = "Virtual"),
+        )
+
+        assertEquals(WatchStatus.VU, status)
+    }
+
+    @Test
+    fun `syncTrackedSeries ignore la saison 0 des specials`() = runTest {
+        val specials = listOf(JellyfinEpisodeDto(id = "jf-0-1", seasonNumber = 0, episodeNumber = 1, userData = JellyfinUserDataDto(played = false)))
+
+        val status = pullOnWatchedSeries(episodes(1, 9, playedUpTo = 9) + specials)
+
+        assertEquals(WatchStatus.VU, status)
+    }
+
+    /**
+     * Arcane après l'ajout de la saison 2 : le serveur a recréé la série, l'ancien id (`jf-old`) répond 404 et
+     * le nouvel item (`jf-new`) porte les deux saisons, la saison 2 étant entamée.
+     */
+    private fun apiWithRecreatedSeries() = FakeJellyfinApi().apply {
+        missingIds = setOf("jf-old")
+        items = listOf(JellyfinItemDto(id = "jf-new", providerIds = mapOf("Tmdb" to "94605")))
+        episodesBySeriesId = mapOf("jf-new" to episodes(1, 9, playedUpTo = 9) + episodes(2, 9, playedUpTo = 1))
+    }
+
+    private suspend fun addArcane(mediaRepository: MediaRepository, jellyfinId: String? = "jf-old", status: WatchStatus = WatchStatus.VU) =
+        (mediaRepository.addMedia(
+            Media(title = "Arcane", type = MediaType.SERIE, status = status, tmdbId = 94605, jellyfinId = jellyfinId),
+        ) as Resource.Success).data
+
+    @Test
+    fun `syncTrackedSeries retrouve une serie recreee sur le serveur et coche la nouvelle saison`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = addArcane(mediaRepository)
+        val episodeRepository = fakeEpisodeRepository()
+        (1..9).forEach { episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, it), watched = true) }
+        val repository = repository(apiWithRecreatedSeries(), FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        val media = mediaRepository.observeMediaById(mediaId).first()
+        assertEquals("jf-new", media?.jellyfinId)
+        assertEquals(WatchStatus.EN_COURS, media?.status)
+        assertTrue(EpisodeKey(2, 1) in episodeRepository.observeWatchedEpisodes(mediaId).first())
+    }
+
+    @Test
+    fun `syncTrackedSeries ne change rien quand l'ancien id est introuvable et la serie absente du serveur`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = addArcane(mediaRepository)
+        val api = apiWithRecreatedSeries().apply { items = emptyList() }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        val media = mediaRepository.observeMediaById(mediaId).first()
+        assertEquals("jf-old", media?.jellyfinId)
+        assertEquals(WatchStatus.VU, media?.status)
+    }
+
+    @Test
+    fun `un 404 sur un id fraichement resolu n'est pas rejoue`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = addArcane(mediaRepository, jellyfinId = null)
+        val api = apiWithRecreatedSeries().apply { missingIds = setOf("jf-new") }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertEquals(WatchStatus.VU, mediaRepository.observeMediaById(mediaId).first()?.status)
+    }
+
+    @Test
+    fun `pushEpisodeWatched retrouve une serie recreee sur le serveur`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = addArcane(mediaRepository)
+        val api = apiWithRecreatedSeries()
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+        val media = mediaRepository.observeMediaById(mediaId).first()!!
+
+        repository.pushEpisodeWatched(media, seasonNumber = 2, episodeNumber = 2, watched = true)
+
+        assertEquals(listOf("https://jellyfin.exemple.fr/Users/user-1/PlayedItems/jf-2-2"), api.playedUrls)
+        assertEquals("jf-new", mediaRepository.observeMediaById(mediaId).first()?.jellyfinId)
+    }
+
+    @Test
+    fun `pushSeriesUnwatched retrouve une serie recreee sur le serveur`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = addArcane(mediaRepository)
+        val api = apiWithRecreatedSeries()
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.pushSeriesUnwatched(mediaRepository.observeMediaById(mediaId).first()!!)
+
+        assertTrue("https://jellyfin.exemple.fr/Users/user-1/PlayedItems/jf-new" in api.unplayedUrls)
+    }
+
+    @Test
+    fun `pushWatchedHistory retrouve une serie recreee sur le serveur`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = addArcane(mediaRepository)
+        val episodeRepository = fakeEpisodeRepository()
+        episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(2, 2), watched = true)
+        val api = apiWithRecreatedSeries()
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
+
+        val result = repository.pushWatchedHistory(mediaRepository.observeMedia().first())
+
+        assertEquals(1, result.episodesMarkedPlayed)
+        assertEquals(listOf("https://jellyfin.exemple.fr/Users/user-1/PlayedItems/jf-2-2"), api.playedUrls)
+    }
+
+    @Test
+    fun `un echec de synchro d'une serie est journalise avec son titre`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        addArcane(mediaRepository)
+        val failure = RuntimeException("serveur injoignable")
+        val api = apiWithRecreatedSeries().apply { error = failure }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        val (priority, message, error) = logged.single()
+        assertEquals(android.util.Log.WARN, priority)
+        assertTrue("Arcane" in message)
+        assertEquals(failure, error)
+    }
+
+    @Test
+    fun `un echec de synchro des films ou d'un envoi est journalise`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = addArcane(mediaRepository)
+        val movie = Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631)
+        val api = apiWithRecreatedSeries().apply { error = RuntimeException("réseau coupé") }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedMovies(listOf(movie))
+        repository.pushEpisodeWatched(mediaRepository.observeMediaById(mediaId).first()!!, 2, 2, watched = true)
+
+        assertEquals(2, logged.size)
+        assertTrue(logged.all { it.first == android.util.Log.WARN })
+    }
+
+    @Test
+    fun `un 401 est journalise en plus d'effacer la session`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        addArcane(mediaRepository)
+        val sessionStore = FakeJellyfinSessionStore(session)
+        val api = apiWithRecreatedSeries().apply { error = unauthorizedException() }
+        val repository = repository(api, sessionStore, mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertEquals(1, logged.size)
+        assertNull(sessionStore.session.first())
+    }
+
+    @Test
+    fun `le remplacement d'un id Jellyfin perime est journalise sans echec`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        addArcane(mediaRepository)
+        val repository = repository(apiWithRecreatedSeries(), FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        val (priority, message, error) = logged.single()
+        assertEquals(android.util.Log.INFO, priority)
+        assertTrue("Arcane" in message)
+        assertNull(error)
+    }
+
+    @Test
+    fun `une synchro reussie ne journalise rien`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        addArcane(mediaRepository, jellyfinId = "jf-new")
+        val repository = repository(apiWithRecreatedSeries(), FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertTrue(logged.isEmpty())
     }
 
     @Test

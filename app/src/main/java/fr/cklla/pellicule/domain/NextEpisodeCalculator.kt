@@ -41,14 +41,38 @@ fun computeNextEpisode(show: TvShowInfo?, watched: Set<EpisodeKey>, today: AirDa
  * prochain épisode recalculé sur les épisodes vus *après* ce changement.
  *
  * Cocher fait progresser (À voir → En cours, et → Vu quand une série terminée n'a plus rien après
- * l'épisode atteint) sans jamais rétrograder ; décocher repasse seulement un contenu Vu à En cours.
- * Une série encore diffusée ne passe jamais à Vu : de nouveaux épisodes peuvent sortir.
+ * l'épisode atteint). Un contenu Vu ne repasse En cours que si l'épisode coché laisse derrière lui un
+ * épisode déjà diffusé : c'est le cas d'une nouvelle saison arrivée après le dernier visionnage.
+ * Décocher repasse un contenu Vu à En cours. Une série encore diffusée ne passe jamais à Vu :
+ * de nouveaux épisodes peuvent sortir.
  */
 fun statusAfterEpisodeChange(current: WatchStatus, watched: Boolean, next: NextEpisode): WatchStatus = when {
     !watched -> if (current == WatchStatus.VU) WatchStatus.EN_COURS else current
     next == NextEpisode.Completed -> WatchStatus.VU
     current == WatchStatus.A_VOIR -> WatchStatus.EN_COURS
+    current == WatchStatus.VU && next is NextEpisode.Available -> WatchStatus.EN_COURS
     else -> current
+}
+
+/**
+ * Vrai quand le serveur expose un épisode (hors saison 0) situé après le dernier épisode vu, qu'il
+ * soit vu lui-même ou non : [watched] doit réunir l'historique local et ce que le serveur signale vu.
+ * Sans aucun épisode vu il n'y a pas de « dernier » : le résultat est faux, pour qu'un contenu marqué
+ * Vu à la main sans historique ne soit pas remis en cours par le simple contenu du serveur.
+ */
+fun hasEpisodeAfterLastWatched(serverEpisodes: Set<EpisodeKey>, watched: Set<EpisodeKey>): Boolean {
+    val lastWatched = watched.filter { it.seasonNumber >= 1 }.maxOrNull() ?: return false
+    return serverEpisodes.any { it.seasonNumber >= 1 && it > lastWatched }
+}
+
+/**
+ * Statut après un pull Jellyfin : le serveur ne fait jamais régresser un statut ([fromJellyfin] ne
+ * peut que le faire progresser, ce qui protège d'un serveur réinstallé sans historique), sauf quand
+ * un contenu Vu reçoit de nouveaux épisodes ([hasNewEpisodes], voir [hasEpisodeAfterLastWatched]).
+ */
+fun statusAfterJellyfinPull(current: WatchStatus, fromJellyfin: WatchStatus, hasNewEpisodes: Boolean): WatchStatus = when {
+    current == WatchStatus.VU && hasNewEpisodes -> WatchStatus.EN_COURS
+    else -> maxOf(current, fromJellyfin)
 }
 
 private fun firstEpisodeAfter(show: TvShowInfo, lastWatched: EpisodeKey?): EpisodeKey? =
