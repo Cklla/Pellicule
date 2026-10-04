@@ -77,4 +77,24 @@ class JellyfinPullEndToEndTest {
         assertEquals(null, media?.watchedAt)
         assertEquals(WatchStatus.EN_COURS, stack.firestore.remoteMedia.value.single().status)
     }
+
+    @Test
+    fun `une serie recreee par le serveur est retrouvee, S2E1 se coche et la serie repasse En cours`() = runTest {
+        val stack = stack(arcane.copy(jellyfinId = "jf-old"), seasonOne)
+        val api = FakeJellyfinApi().apply {
+            missingIds = setOf("jf-old")
+            items = listOf(fr.cklla.pellicule.data.remote.jellyfin.dto.JellyfinItemDto(id = "jf-arcane", providerIds = mapOf("Tmdb" to "94605")))
+            episodesBySeriesId = serverWithSecondSeasonStarted().episodesBySeriesId
+        }
+        val repository = JellyfinRepositoryImpl(api, FakeJellyfinSessionStore(session), stack.mediaRepository, stack.episodeRepository)
+
+        repository.syncTrackedSeries(stack.mediaRepository.observeMedia().first())
+
+        val media = stack.mediaRepository.observeMediaById("arcane").first()
+        assertEquals("jf-arcane", media?.jellyfinId)
+        assertEquals(WatchStatus.EN_COURS, media?.status)
+        assertEquals(seasonOne + EpisodeKey(2, 1), stack.episodeRepository.observeWatchedEpisodes("arcane").first())
+        assertEquals(seasonOne + EpisodeKey(2, 1), stack.firestore.remoteEpisodes.value["arcane"])
+        assertEquals("jf-arcane", stack.firestore.remoteMedia.value.single().jellyfinId)
+    }
 }
