@@ -44,6 +44,7 @@ import fr.cklla.pellicule.ui.permission.RequestNotificationPermissionOnce
 import fr.cklla.pellicule.ui.recherche.RechercheScreen
 import fr.cklla.pellicule.ui.stats.RecapMediaScreen
 import fr.cklla.pellicule.ui.stats.RecapScreen
+import fr.cklla.pellicule.ui.stats.RecapStoryScreen
 import fr.cklla.pellicule.ui.stats.StatsScreen
 import fr.cklla.pellicule.ui.sync.AppSyncViewModel
 import fr.cklla.pellicule.ui.theme.BackgroundDark
@@ -197,6 +198,16 @@ fun PelliculeApp(
                     onMediaListClick = { year, type ->
                         navController.navigate(PelliculeDestinations.recapMediaRoute(year, type))
                     },
+                    onStoryClick = { year -> navController.navigate(PelliculeDestinations.recapStoryRoute(year)) },
+                )
+            }
+            composable(
+                route = PelliculeDestinations.RECAP_STORY,
+                arguments = listOf(navArgument(PelliculeDestinations.RECAP_ARG_YEAR) { type = NavType.IntType }),
+            ) {
+                RecapStoryScreen(
+                    onCloseClick = { navController.popBackStack() },
+                    onMediaClick = { mediaId -> navController.navigate(PelliculeDestinations.detailRoute(mediaId)) },
                 )
             }
             composable(

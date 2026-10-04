@@ -11,10 +11,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +36,7 @@ import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.ui.labelRes
+import fr.cklla.pellicule.ui.theme.AccentPurple
 import fr.cklla.pellicule.ui.theme.AccentPurpleLight
 import fr.cklla.pellicule.ui.theme.BackgroundDark
 import fr.cklla.pellicule.ui.theme.BorderHairline
@@ -53,6 +57,7 @@ import fr.cklla.pellicule.ui.theme.color
 fun RecapScreen(
     onBackClick: () -> Unit,
     onMediaListClick: (year: Int, type: MediaType?) -> Unit,
+    onStoryClick: (year: Int) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: RecapViewModel = hiltViewModel(),
 ) {
@@ -62,6 +67,7 @@ fun RecapScreen(
         stats = stats,
         onBackClick = onBackClick,
         onMediaListClick = { type -> onMediaListClick(viewModel.year, type) },
+        onStoryClick = { onStoryClick(viewModel.year) },
         modifier = modifier,
     )
 }
@@ -72,6 +78,7 @@ private fun RecapContent(
     stats: StatsData,
     onBackClick: () -> Unit,
     onMediaListClick: (MediaType?) -> Unit,
+    onStoryClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -90,6 +97,16 @@ private fun RecapContent(
             Column {
                 Text(text = stringResource(R.string.recap_kicker), style = PelliculeTextStyles.kicker, color = AccentPurpleLight)
                 Text(text = stringResource(R.string.recap_title, year), style = PelliculeTextStyles.screenTitle, color = TextPrimary)
+            }
+            Button(
+                onClick = onStoryClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple, contentColor = TextPrimary),
+            ) {
+                Text(text = stringResource(R.string.recap_story_button), style = PelliculeTextStyles.statusPillLabel)
             }
             RecapHeroCard(stats = stats, onMediaListClick = onMediaListClick)
         }
@@ -168,6 +185,7 @@ private fun RecapContentPreview() {
             stats = computeStats(media.map { it.copy(watchedAt = 1_790_000_000_000L) }, selectedYear = 2026),
             onBackClick = {},
             onMediaListClick = {},
+            onStoryClick = {},
         )
     }
 }
