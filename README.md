@@ -55,6 +55,13 @@ optionnelle avec un serveur Jellyfin.
   correspondante. Une notification locale prévient une seule fois par année, un tap ouvre le récap ;
   la permission de notification est demandée une seule fois après la connexion, et son refus
   n'empêche pas d'accéder au récap.
+- **Récap en images** : depuis l'écran du récap, le bouton « Voir mon récap en images » ouvre une suite de
+  slides façon *Wrapped*, à balayer : le total de contenus vus avec sa répartition par type, puis pour
+  chaque type tes coups de cœur (affiches et étoiles, d'abord les 5 étoiles, complétés par des 4 étoiles
+  s'il y en a moins de 3), les faits de l'année (premier et dernier contenu vus, mois le plus chargé,
+  contenu le plus ancien) et une mosaïque de tout ce que tu as vu, dans l'ordre chronologique. Un tap sur
+  une affiche ouvre la fiche. Les slides sans rien à montrer sont omises, et les contenus dont l'année a
+  été choisie à la main ne comptent pas dans les faits qui exigent une date exacte.
 - **Recherche** : recherche multi-type via l'[API TMDB](https://www.themoviedb.org/documentation/api)
   (titre, affiche, année), aperçu de la fiche avant ajout, ajout en un tap au suivi. Fiches en
   français en priorité, avec fallback sur l'anglais quand la traduction française manque.
@@ -84,6 +91,10 @@ optionnelle avec un serveur Jellyfin.
 | Compte | Statistiques | Récap annuel | Calendrier |
 |:---:|:---:|:---:|:---:|
 | <img src="screenshots/compte.png" width="200" alt="Compte"> | <img src="screenshots/statistiques.png" width="200" alt="Statistiques"> | <img src="screenshots/recap.png" width="200" alt="Récap annuel"> | <img src="screenshots/calendrier.png" width="200" alt="Calendrier"> |
+
+| Récap en images | | | |
+|:---:|:---:|:---:|:---:|
+| <img src="screenshots/recap-images.png" width="200" alt="Récap en images"> | | | |
 
 ## Stack technique
 
@@ -283,7 +294,7 @@ app/src/main/java/fr/cklla/pellicule/
 ├── domain/
 │   ├── calendar/        # Grille du calendrier mensuel et règles de rappel (fonctions pures)
 │   ├── model/           # Modèles métier (Media, WatchStatus, Resource, AuthUser…)
-│   ├── recap/           # Fenêtre du récap annuel et règle de notification (fonctions pures)
+│   ├── recap/           # Fenêtre du récap annuel, règle de notification, coups de cœur et faits du récap en images (fonctions pures)
 │   ├── repository/      # Interfaces de repository
 │   └── usecase/         # Cas d'usage partagés (cocher un épisode)
 └── ui/
@@ -292,7 +303,7 @@ app/src/main/java/fr/cklla/pellicule/
     ├── login/           # Écran de connexion Google
     ├── recherche/       # Écran Recherche TMDB
     ├── compte/          # Écran Compte (déconnexion, connexion Jellyfin, accès aux statistiques, carte du récap)
-    ├── stats/           # Écrans Statistiques, Récap annuel et liste des contenus vus
+    ├── stats/           # Écrans Statistiques, Récap annuel, récap en images et liste des contenus vus
     ├── jellyfin/         # Écran de connexion à un serveur Jellyfin
     ├── sync/              # Synchro Jellyfin déclenchée à la reprise de l'app
     ├── navigation/         # Routes Navigation Compose
@@ -325,6 +336,10 @@ app/src/main/java/fr/cklla/pellicule/
   été affichée : sans permission, elle reste due et part dès que la permission est accordée dans la
   fenêtre. Les statistiques et le récap se calculent en direct sur Room, aucune donnée supplémentaire
   n'est synchronisée.
+- **Récap en images calculé en direct, sans donnée supplémentaire** : coups de cœur, faits et mosaïque
+  sont dérivés du statut, du type, de la note, de `watchedAt` et de l'année de sortie déjà stockés, par
+  des fonctions pures (`domain/recap`). Les grilles défilent verticalement dans chaque slide : jamais de
+  carrousel horizontal dans le pager horizontal, pour ne pas disputer le balayage.
 - **La synchro Jellyfin ne peut que faire progresser le suivi** : le pull ajoute les épisodes vus du
   serveur sans jamais dévoir ce qui l'est déjà localement, ni faire régresser un statut — un serveur
   réinstallé sans son historique ne peut pas effacer le suivi. Les retours en arrière se font depuis
