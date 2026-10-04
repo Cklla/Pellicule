@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.data.remote.firestore
 
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import kotlinx.coroutines.flow.Flow
 
@@ -14,8 +15,11 @@ import kotlinx.coroutines.flow.Flow
  */
 interface FirestoreMediaDataSource {
 
-    /** Écoute temps réel de la collection de l'utilisateur [uid]. */
-    fun observeMedia(uid: String): Flow<List<Media>>
+    /**
+     * Écoute temps réel de la collection de l'utilisateur [uid]. Les épisodes vus arrivent avec leur
+     * contenu, dans un même snapshot : le contenu existe donc toujours en Room avant ses épisodes.
+     */
+    fun observeMedia(uid: String): Flow<List<RemoteMedia>>
 
     /** Lecture ponctuelle (pas d'écoute), utilisée pour le bootstrap au premier lancement. */
     suspend fun fetchMediaOnce(uid: String): List<Media>
@@ -23,6 +27,17 @@ interface FirestoreMediaDataSource {
     suspend fun upsertMedia(uid: String, media: Media)
 
     suspend fun deleteMedia(uid: String, mediaId: String)
+
+    /**
+     * Ajoute [episodes] aux épisodes vus du contenu, sans lire ni réécrire le reste de la liste :
+     * deux appareils qui cochent chacun un épisode ne s'écrasent pas, et un snapshot en retard ne
+     * peut pas faire perdre un épisode déjà enregistré. L'écriture est émise avant que la fonction
+     * ne suspende, donc dans l'ordre des appels.
+     */
+    suspend fun addWatchedEpisodes(uid: String, mediaId: String, episodes: Set<EpisodeKey>)
+
+    /** Retire [episodes] des épisodes vus du contenu (même principe que [addWatchedEpisodes]). */
+    suspend fun removeWatchedEpisodes(uid: String, mediaId: String, episodes: Set<EpisodeKey>)
 
     /** Écriture groupée, utilisée pour l'upload initial du suivi local pré-existant. */
     suspend fun uploadAll(uid: String, media: List<Media>)
@@ -34,3 +49,9 @@ interface FirestoreMediaDataSource {
      */
     suspend fun clearLocalCache()
 }
+
+/**
+ * Un contenu tel que Firestore le renvoie. [watchedEpisodes] vaut `null` quand le document n'a pas
+ * encore le champ : Room garde alors ses épisodes au lieu de les vider.
+ */
+data class RemoteMedia(val media: Media, val watchedEpisodes: Set<EpisodeKey>?)

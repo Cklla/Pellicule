@@ -17,6 +17,12 @@ interface EpisodeDao {
     @Query("SELECT * FROM watched_episode")
     fun observeAllWatched(): Flow<List<WatchedEpisodeEntity>>
 
+    @Query("SELECT * FROM watched_episode WHERE mediaId = :mediaId")
+    suspend fun getWatchedOnce(mediaId: String): List<WatchedEpisodeEntity>
+
+    @Query("SELECT * FROM watched_episode")
+    suspend fun getAllWatchedOnce(): List<WatchedEpisodeEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun markWatched(episode: WatchedEpisodeEntity)
 

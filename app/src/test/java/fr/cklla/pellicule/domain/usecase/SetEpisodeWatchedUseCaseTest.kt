@@ -1,7 +1,6 @@
 package fr.cklla.pellicule.domain.usecase
 
-import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
-import fr.cklla.pellicule.data.repository.FakeEpisodeDao
+import fr.cklla.pellicule.data.repository.fakeEpisodeRepository
 import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
 import fr.cklla.pellicule.data.repository.FakeMediaDao
 import fr.cklla.pellicule.data.repository.FakeTvShowInfoRepository
@@ -27,7 +26,7 @@ import org.junit.Test
 class SetEpisodeWatchedUseCaseTest {
 
     private val mediaRepository = fakeMediaRepository(FakeMediaDao())
-    private val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+    private val episodeRepository = fakeEpisodeRepository()
     private val tvShowRepository = FakeTvShowInfoRepository()
     private val jellyfinRepository = FakeJellyfinRepository()
     private val useCase = SetEpisodeWatchedUseCase(

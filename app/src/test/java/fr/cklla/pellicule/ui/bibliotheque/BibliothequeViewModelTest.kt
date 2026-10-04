@@ -1,7 +1,6 @@
 package fr.cklla.pellicule.ui.bibliotheque
 
-import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
-import fr.cklla.pellicule.data.repository.FakeEpisodeDao
+import fr.cklla.pellicule.data.repository.fakeEpisodeRepository
 import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
 import fr.cklla.pellicule.data.repository.FakeMediaDao
 import fr.cklla.pellicule.data.repository.FakeTvShowInfoRepository
@@ -51,7 +50,7 @@ class BibliothequeViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+    private val episodeRepository = fakeEpisodeRepository()
     private val tvShowRepository = FakeTvShowInfoRepository()
     private val jellyfinRepository = FakeJellyfinRepository()
 

@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.data.remote.firestore
 
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.WatchStatus
@@ -110,5 +111,43 @@ class FirestoreMappersTest {
         )
 
         assertNull(mapToMedia("1", data)?.posterUrl)
+    }
+
+    @Test
+    fun `toFirestoreMap n'inclut pas les episodes vus, ecrits a part par ajout et retrait`() {
+        val map = Media(id = "m", title = "Fallout", type = MediaType.SERIE, status = WatchStatus.EN_COURS).toFirestoreMap()
+
+        assertEquals(false, map.containsKey(FIELD_WATCHED_EPISODES))
+    }
+
+    @Test
+    fun `un episode s'ecrit saison deux-points episode`() {
+        assertEquals("2:5", EpisodeKey(2, 5).toFirestoreValue())
+        assertEquals("1:1100", EpisodeKey(1, 1100).toFirestoreValue())
+    }
+
+    @Test
+    fun `mapToWatchedEpisodes relit les episodes ecrits`() {
+        val data = mapOf<String, Any?>(FIELD_WATCHED_EPISODES to listOf("1:1", "1:2", "2:1"))
+
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2), EpisodeKey(2, 1)), mapToWatchedEpisodes(data))
+    }
+
+    @Test
+    fun `mapToWatchedEpisodes distingue un champ absent d'une liste vide`() {
+        assertNull(mapToWatchedEpisodes(emptyMap()))
+        assertEquals(emptySet<EpisodeKey>(), mapToWatchedEpisodes(mapOf(FIELD_WATCHED_EPISODES to emptyList<String>())))
+    }
+
+    @Test
+    fun `mapToWatchedEpisodes ignore les entrees illisibles sans perdre les autres`() {
+        val data = mapOf<String, Any?>(FIELD_WATCHED_EPISODES to listOf("1:1", "n'importe quoi", "1:2:3", "a:b", 42, "3:4"))
+
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(3, 4)), mapToWatchedEpisodes(data))
+    }
+
+    @Test
+    fun `mapToWatchedEpisodes renvoie null si le champ n'est pas une liste`() {
+        assertNull(mapToWatchedEpisodes(mapOf(FIELD_WATCHED_EPISODES to "1:1")))
     }
 }

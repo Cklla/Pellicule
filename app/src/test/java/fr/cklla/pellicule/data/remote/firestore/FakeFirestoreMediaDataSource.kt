@@ -1,8 +1,10 @@
 package fr.cklla.pellicule.data.remote.firestore
 
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
@@ -15,6 +17,12 @@ import kotlinx.coroutines.flow.update
 class FakeFirestoreMediaDataSource : FirestoreMediaDataSource {
 
     val remoteMedia = MutableStateFlow<List<Media>>(emptyList())
+
+    /** Épisodes vus par contenu côté Firestore ; un contenu absent de la map n'a pas encore le champ. */
+    val remoteEpisodes = MutableStateFlow<Map<String, Set<EpisodeKey>>>(emptyMap())
+
+    val addedEpisodes = mutableListOf<Pair<String, Set<EpisodeKey>>>()
+    val removedEpisodes = mutableListOf<Pair<String, Set<EpisodeKey>>>()
 
     /** Permet de simuler un échec réseau/Firestore dans les tests. */
     var shouldThrowOnWrite = false
@@ -34,12 +42,16 @@ class FakeFirestoreMediaDataSource : FirestoreMediaDataSource {
     var observeCallCount = 0
         private set
 
-    override fun observeMedia(uid: String): Flow<List<Media>> = flow {
+    override fun observeMedia(uid: String): Flow<List<RemoteMedia>> = flow {
         observeCallCount++
         if (observeCallCount <= failedObserveAttempts) {
             error("Échec Firestore simulé à l'écoute")
         }
-        emitAll(remoteMedia)
+        emitAll(
+            combine(remoteMedia, remoteEpisodes) { media, episodes ->
+                media.map { RemoteMedia(it, episodes[it.id]) }
+            },
+        )
     }
 
     override suspend fun fetchMediaOnce(uid: String): List<Media> = remoteMedia.value
@@ -50,10 +62,23 @@ class FakeFirestoreMediaDataSource : FirestoreMediaDataSource {
         remoteMedia.update { list -> list.filterNot { it.id == media.id } + media }
     }
 
+    override suspend fun addWatchedEpisodes(uid: String, mediaId: String, episodes: Set<EpisodeKey>) {
+        if (shouldThrowOnWrite) error("Échec Firestore simulé")
+        addedEpisodes += mediaId to episodes
+        remoteEpisodes.update { it + (mediaId to (it[mediaId].orEmpty() + episodes)) }
+    }
+
+    override suspend fun removeWatchedEpisodes(uid: String, mediaId: String, episodes: Set<EpisodeKey>) {
+        if (shouldThrowOnWrite) error("Échec Firestore simulé")
+        removedEpisodes += mediaId to episodes
+        remoteEpisodes.update { it + (mediaId to (it[mediaId].orEmpty() - episodes)) }
+    }
+
     override suspend fun deleteMedia(uid: String, mediaId: String) {
         if (shouldThrowOnWrite) error("Échec Firestore simulé")
         deletedMediaIds += mediaId
         remoteMedia.update { list -> list.filterNot { it.id == mediaId } }
+        remoteEpisodes.update { it - mediaId }
     }
 
     override suspend fun uploadAll(uid: String, media: List<Media>) {

@@ -2,9 +2,8 @@ package fr.cklla.pellicule.ui.detail
 
 import androidx.lifecycle.SavedStateHandle
 import fr.cklla.pellicule.data.repository.EpisodeReminderRepositoryImpl
-import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
+import fr.cklla.pellicule.data.repository.fakeEpisodeRepository
 import fr.cklla.pellicule.data.repository.FakeEpisodeReminderDao
-import fr.cklla.pellicule.data.repository.FakeEpisodeDao
 import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
 import fr.cklla.pellicule.data.repository.FakeMediaDao
 import fr.cklla.pellicule.data.repository.FakeTvShowInfoRepository
@@ -72,7 +71,7 @@ class DetailViewModelTest {
         mediaId: String,
         mediaRepository: MediaRepository,
         tvDetailsRepository: FakeTvDetailsRepository = FakeTvDetailsRepository(),
-        episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
+        episodeRepository: EpisodeRepository = fakeEpisodeRepository(),
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
         watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
@@ -106,7 +105,7 @@ class DetailViewModelTest {
         year: String = "2022",
         posterUrl: String = "",
         tvDetailsRepository: FakeTvDetailsRepository = FakeTvDetailsRepository(),
-        episodeRepository: EpisodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao()),
+        episodeRepository: EpisodeRepository = fakeEpisodeRepository(),
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
         watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
@@ -379,7 +378,7 @@ class DetailViewModelTest {
     @Test
     fun `un apercu sans tmdbId valide n'a pas de contenu`() = runTest {
         val repository = fakeMediaRepository(FakeMediaDao())
-        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        val episodeRepository = fakeEpisodeRepository()
         val jellyfinRepository = FakeJellyfinRepository()
         val viewModel = DetailViewModel(
             savedStateHandle = SavedStateHandle(emptyMap()),
@@ -514,7 +513,7 @@ class DetailViewModelTest {
             Media(title = "Kaamelott", type = MediaType.SERIE, status = WatchStatus.VU, tmdbId = 95396),
         )
         val mediaId = (addResult as Resource.Success).data
-        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        val episodeRepository = fakeEpisodeRepository()
         episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 1), watched = true)
         episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 2), watched = true)
         val jellyfinRepository = FakeJellyfinRepository().apply {

@@ -23,7 +23,7 @@ service cloud.firestore {
     function isValidMedia(media) {
       return media.keys().hasOnly([
                'title', 'type', 'status', 'tmdbId', 'releaseYear', 'posterUrl', 'jellyfinId',
-               'rating', 'watchedAt'
+               'rating', 'watchedAt', 'watchedEpisodes'
              ])
              && media.keys().hasAll(['title', 'type', 'status'])
              && media.title is string && media.title.size() <= 300
@@ -36,13 +36,22 @@ service cloud.firestore {
              // rendrait ces règles obsolètes avec le temps.
              && isIntBetween(media, 'watchedAt', 0, 32503680000000)
              && isStringUpTo(media, 'posterUrl', 2000)
-             && isStringUpTo(media, 'jellyfinId', 200);
+             && isStringUpTo(media, 'jellyfinId', 200)
+             && isEpisodeList(media);
     }
 
     // Champ optionnel : absent ou null est valide, une valeur présente doit respecter les bornes.
     function isIntBetween(media, field, min, max) {
       return !(field in media) || media[field] == null
              || (media[field] is int && media[field] >= min && media[field] <= max);
+    }
+
+    // Épisodes vus, au format « saison:épisode » (voir `FirestoreMappers`). Les règles ne peuvent pas
+    // parcourir une liste : on borne seulement sa taille (un anime de plus de mille épisodes tient
+    // largement) pour qu'un document ne grossisse pas sans limite.
+    function isEpisodeList(media) {
+      return !('watchedEpisodes' in media) || media.watchedEpisodes == null
+             || (media.watchedEpisodes is list && media.watchedEpisodes.size() <= 10000);
     }
 
     function isStringUpTo(media, field, maxLength) {

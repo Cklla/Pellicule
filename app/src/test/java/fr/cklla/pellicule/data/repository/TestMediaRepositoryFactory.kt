@@ -1,7 +1,9 @@
 package fr.cklla.pellicule.data.repository
 
+import fr.cklla.pellicule.data.local.EpisodeDao
 import fr.cklla.pellicule.data.local.MediaDao
 import fr.cklla.pellicule.data.remote.firestore.FakeFirestoreMediaDataSource
+import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.util.TimeSource
 import kotlinx.coroutines.CoroutineScope
@@ -19,10 +21,28 @@ fun fakeMediaRepository(
     firestoreDataSource: FakeFirestoreMediaDataSource = FakeFirestoreMediaDataSource(),
     authRepository: FakeAuthRepository = FakeAuthRepository(),
     timeSource: TimeSource = TimeSource { System.currentTimeMillis() },
+    episodeDao: EpisodeDao = FakeEpisodeDao(),
 ): MediaRepository = MediaRepositoryImpl(
     mediaDao = dao,
+    episodeDao = episodeDao,
     firestoreDataSource = firestoreDataSource,
     authRepository = authRepository,
     timeSource = timeSource,
+    repositoryScope = CoroutineScope(UnconfinedTestDispatcher()),
+)
+
+/**
+ * Construit un [EpisodeRepositoryImpl] de test : par défaut un Room en mémoire, un Firestore factice et
+ * un utilisateur connecté, avec une portée qui exécute les envois Firestore immédiatement.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+fun fakeEpisodeRepository(
+    dao: EpisodeDao = FakeEpisodeDao(),
+    firestoreDataSource: FakeFirestoreMediaDataSource = FakeFirestoreMediaDataSource(),
+    authRepository: FakeAuthRepository = FakeAuthRepository(),
+): EpisodeRepositoryImpl = EpisodeRepositoryImpl(
+    episodeDao = dao,
+    firestoreDataSource = firestoreDataSource,
+    authRepository = authRepository,
     repositoryScope = CoroutineScope(UnconfinedTestDispatcher()),
 )

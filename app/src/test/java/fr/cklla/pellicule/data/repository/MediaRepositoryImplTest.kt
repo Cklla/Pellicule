@@ -1,7 +1,9 @@
 package fr.cklla.pellicule.data.repository
 
+import fr.cklla.pellicule.data.local.entity.WatchedEpisodeEntity
 import fr.cklla.pellicule.data.remote.firestore.FakeFirestoreMediaDataSource
 import fr.cklla.pellicule.domain.model.AuthUser
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
@@ -32,6 +34,7 @@ import org.junit.Test
 class MediaRepositoryImplTest {
 
     private lateinit var dao: FakeMediaDao
+    private lateinit var episodeDao: FakeEpisodeDao
     private lateinit var firestoreDataSource: FakeFirestoreMediaDataSource
     private lateinit var authRepository: FakeAuthRepository
     private lateinit var repository: MediaRepository
@@ -55,6 +58,7 @@ class MediaRepositoryImplTest {
     private fun buildRepository(scope: CoroutineScope = CoroutineScope(UnconfinedTestDispatcher())) {
         repository = MediaRepositoryImpl(
             mediaDao = dao,
+            episodeDao = episodeDao,
             firestoreDataSource = firestoreDataSource,
             authRepository = authRepository,
             timeSource = timeSource,
@@ -65,6 +69,7 @@ class MediaRepositoryImplTest {
     @Before
     fun setUp() {
         dao = FakeMediaDao()
+        episodeDao = FakeEpisodeDao()
         firestoreDataSource = FakeFirestoreMediaDataSource()
         authRepository = FakeAuthRepository()
         buildRepository()
@@ -383,5 +388,81 @@ class MediaRepositoryImplTest {
         // Le miroir Firestore -> Room fait ensuite autorité : le contenu distant remplace le local.
         val media = repository.observeMedia().first()
         assertEquals(listOf("distant-1"), media.map { it.id })
+    }
+
+    @Test
+    fun `les episodes vus reviennent de Firestore apres une reinstallation`() = runTest {
+        val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
+        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+        firestoreDataSource.remoteMedia.value = listOf(serie)
+
+        val restored = episodeDao.getWatchedOnce("fallout").map { EpisodeKey(it.seasonNumber, it.episodeNumber) }.toSet()
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)), restored)
+    }
+
+    @Test
+    fun `un episode decoche sur un autre appareil est decoche ici aussi`() = runTest {
+        val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
+        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+        firestoreDataSource.remoteMedia.value = listOf(serie)
+
+        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1)))
+
+        assertEquals(1, episodeDao.getWatchedOnce("fallout").size)
+    }
+
+    @Test
+    fun `une liste d'episodes vide cote Firestore vide les episodes locaux`() = runTest {
+        val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
+        dao.insert(serie.toEntity())
+        episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1)))
+
+        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to emptySet())
+        firestoreDataSource.remoteMedia.value = listOf(serie)
+
+        assertTrue(episodeDao.getWatchedOnce("fallout").isEmpty())
+    }
+
+    @Test
+    fun `un document sans champ d'episodes ne vide pas Room et remonte les episodes locaux`() = runTest {
+        val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
+        dao.insert(serie.toEntity())
+        episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1), WatchedEpisodeEntity("fallout", 1, 2)))
+
+        firestoreDataSource.remoteMedia.value = listOf(serie)
+
+        assertEquals(2, episodeDao.getWatchedOnce("fallout").size)
+        assertEquals(
+            listOf("fallout" to setOf(EpisodeKey(1, 1), EpisodeKey(1, 2))),
+            firestoreDataSource.addedEpisodes,
+        )
+    }
+
+    @Test
+    fun `la remontee des episodes locaux n'est tentee qu'une fois par session`() = runTest {
+        val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
+        dao.insert(serie.toEntity())
+        episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1)))
+        // Règles pas encore publiées : l'écriture est refusée, le document reste sans champ.
+        firestoreDataSource.shouldThrowOnWrite = true
+
+        firestoreDataSource.remoteMedia.value = listOf(serie)
+        firestoreDataSource.remoteMedia.value = listOf(serie.copy(title = "Fallout"))
+        firestoreDataSource.remoteMedia.value = listOf(serie.copy(title = "Fallout (2024)"))
+
+        firestoreDataSource.shouldThrowOnWrite = false
+        assertTrue(firestoreDataSource.addedEpisodes.isEmpty())
+        assertEquals(1, episodeDao.getWatchedOnce("fallout").size)
+    }
+
+    @Test
+    fun `les episodes d'un contenu disparu de Firestore partent avec lui`() = runTest {
+        val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
+        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1)))
+        firestoreDataSource.remoteMedia.value = listOf(serie)
+
+        firestoreDataSource.remoteMedia.value = emptyList()
+
+        assertTrue(dao.getAllIds().isEmpty())
     }
 }

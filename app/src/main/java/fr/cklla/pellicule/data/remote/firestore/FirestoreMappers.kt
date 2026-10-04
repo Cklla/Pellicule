@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.data.remote.firestore
 
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.WatchStatus
@@ -25,6 +26,9 @@ private const val FIELD_POSTER_URL = "posterUrl"
 private const val FIELD_JELLYFIN_ID = "jellyfinId"
 private const val FIELD_RATING = "rating"
 private const val FIELD_WATCHED_AT = "watchedAt"
+
+/** Épisodes vus d'une série, dans le même document que le contenu (voir [toFirestoreValue]). */
+const val FIELD_WATCHED_EPISODES = "watchedEpisodes"
 
 fun Media.toFirestoreMap(): Map<String, Any?> = mapOf(
     FIELD_TITLE to title,
@@ -67,3 +71,26 @@ fun mapToMedia(id: String, data: Map<String, Any?>): Media? {
         watchedAt = (data[FIELD_WATCHED_AT] as? Number)?.toLong(),
     )
 }
+
+/**
+ * Un épisode vu est stocké sous la forme `saison:épisode` (« 2:5 »). Une chaîne plutôt qu'un entier
+ * composé : un anime peut compter plus de mille épisodes dans une même saison, aucun facteur de
+ * composition n'est donc sûr.
+ */
+fun EpisodeKey.toFirestoreValue(): String = "$seasonNumber:$episodeNumber"
+
+private fun parseEpisodeKey(raw: Any?): EpisodeKey? {
+    val parts = (raw as? String)?.split(':') ?: return null
+    if (parts.size != 2) return null
+    val season = parts[0].toIntOrNull() ?: return null
+    val episode = parts[1].toIntOrNull() ?: return null
+    return EpisodeKey(season, episode)
+}
+
+/**
+ * Épisodes vus d'un document. `null` quand le champ est absent (document créé avant que les épisodes
+ * soient synchronisés) : à distinguer d'une liste vide, qui veut dire « aucun épisode vu ». Une
+ * entrée illisible est ignorée sans invalider les autres.
+ */
+fun mapToWatchedEpisodes(data: Map<String, Any?>): Set<EpisodeKey>? =
+    (data[FIELD_WATCHED_EPISODES] as? List<*>)?.mapNotNull(::parseEpisodeKey)?.toSet()

@@ -38,7 +38,7 @@ class JellyfinRepositoryImplTest {
         api: FakeJellyfinApi = FakeJellyfinApi(),
         sessionStore: FakeJellyfinSessionStore = FakeJellyfinSessionStore(),
         mediaRepository: MediaRepository = fakeMediaRepository(FakeMediaDao()),
-        episodeRepository: EpisodeRepositoryImpl = EpisodeRepositoryImpl(FakeEpisodeDao()),
+        episodeRepository: EpisodeRepositoryImpl = fakeEpisodeRepository(),
     ) = JellyfinRepositoryImpl(api, sessionStore, mediaRepository, episodeRepository)
 
     @Test
@@ -127,7 +127,7 @@ class JellyfinRepositoryImplTest {
                 ),
             )
         }
-        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        val episodeRepository = fakeEpisodeRepository()
         val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository, episodeRepository)
 
         repository.syncTrackedSeries(mediaRepository.observeMedia().first())
@@ -296,7 +296,7 @@ class JellyfinRepositoryImplTest {
         ) as Resource.Success).data
         // L'historique local garde une trace des épisodes déjà vus lors d'un premier visionnage :
         // il ne doit plus servir à recalculer le statut, sinon "Vu" se réimposerait indéfiniment.
-        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        val episodeRepository = fakeEpisodeRepository()
         episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 1), watched = true)
         episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 2), watched = true)
         val api = FakeJellyfinApi().apply {
@@ -320,7 +320,7 @@ class JellyfinRepositoryImplTest {
         val mediaId = (mediaRepository.addMedia(
             Media(title = "Kaamelott", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 100, jellyfinId = "jf-series-1"),
         ) as Resource.Success).data
-        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        val episodeRepository = fakeEpisodeRepository()
         repeat(5) { index -> episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, index + 1), watched = true) }
         // Le serveur n'expose que deux épisodes pour cette série (découpage différent de celui des
         // métadonnées), dont un seul vu : la série est donc en cours, pas vue.
@@ -495,7 +495,7 @@ class JellyfinRepositoryImplTest {
         val mediaId = (mediaRepository.addMedia(
             Media(title = "Arcane", type = MediaType.SERIE, status = WatchStatus.VU, tmdbId = 94605, jellyfinId = "jf-series-1"),
         ) as Resource.Success).data
-        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        val episodeRepository = fakeEpisodeRepository()
         episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 1), watched = true)
         episodeRepository.setEpisodeWatched(mediaId, EpisodeKey(1, 2), watched = true)
 
@@ -526,7 +526,7 @@ class JellyfinRepositoryImplTest {
             val mediaId = (mediaRepository.addMedia(
                 Media(title = "Fallout", type = MediaType.SERIE, status = initialStatus, tmdbId = 106379),
             ) as Resource.Success).data
-            val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+            val episodeRepository = fakeEpisodeRepository()
 
             // La saison 1 a disparu du serveur : il ne reste que la saison 2, jamais commencée.
             val api = FakeJellyfinApi().apply {
@@ -634,7 +634,7 @@ class JellyfinRepositoryImplTest {
         val seriesId = (mediaRepository.addMedia(
             Media(title = "Arcane", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 94605, jellyfinId = "jf-series-1"),
         ) as Resource.Success).data
-        val episodeRepository = EpisodeRepositoryImpl(FakeEpisodeDao())
+        val episodeRepository = fakeEpisodeRepository()
         episodeRepository.setEpisodeWatched(seriesId, EpisodeKey(1, 1), watched = true)
 
         val api = FakeJellyfinApi().apply {

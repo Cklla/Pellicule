@@ -1,6 +1,9 @@
 package fr.cklla.pellicule.data.remote.firestore
 
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import javax.inject.Inject
 import javax.inject.Provider
@@ -30,14 +33,15 @@ class FirestoreMediaDataSourceImpl @Inject constructor(
     // `callbackFlow` + `awaitClose` : le listener Firestore est annulé proprement dès que le
     // collecteur (côté `MediaRepositoryImpl`, via `collectLatest` sur l'utilisateur courant) se
     // désabonne, sans quoi il continuerait à tourner pour un utilisateur qui s'est déconnecté.
-    override fun observeMedia(uid: String): Flow<List<Media>> = callbackFlow {
+    override fun observeMedia(uid: String): Flow<List<RemoteMedia>> = callbackFlow {
         val registration = mediaCollection(uid).addSnapshotListener { snapshot, error ->
             if (error != null) {
                 close(error)
                 return@addSnapshotListener
             }
             val media = snapshot?.documents.orEmpty().mapNotNull { doc ->
-                doc.data?.let { mapToMedia(doc.id, it) }
+                val data = doc.data ?: return@mapNotNull null
+                mapToMedia(doc.id, data)?.let { RemoteMedia(it, mapToWatchedEpisodes(data)) }
             }
             trySend(media)
         }
@@ -49,12 +53,30 @@ class FirestoreMediaDataSourceImpl @Inject constructor(
             doc.data?.let { mapToMedia(doc.id, it) }
         }
 
+    // `merge` : le document porte aussi `watchedEpisodes`, que `toFirestoreMap` ne contient pas. Sans
+    // fusion, chaque changement de statut ou de note effacerait les épisodes vus.
     override suspend fun upsertMedia(uid: String, media: Media) {
-        mediaCollection(uid).document(media.id).set(media.toFirestoreMap()).await()
+        mediaCollection(uid).document(media.id).set(media.toFirestoreMap(), SetOptions.merge()).await()
     }
 
     override suspend fun deleteMedia(uid: String, mediaId: String) {
         mediaCollection(uid).document(mediaId).delete().await()
+    }
+
+    override suspend fun addWatchedEpisodes(uid: String, mediaId: String, episodes: Set<EpisodeKey>) {
+        if (episodes.isEmpty()) return
+        val values = episodes.map { it.toFirestoreValue() }.toTypedArray()
+        mediaCollection(uid).document(mediaId)
+            .set(mapOf(FIELD_WATCHED_EPISODES to FieldValue.arrayUnion(*values)), SetOptions.merge())
+            .await()
+    }
+
+    override suspend fun removeWatchedEpisodes(uid: String, mediaId: String, episodes: Set<EpisodeKey>) {
+        if (episodes.isEmpty()) return
+        val values = episodes.map { it.toFirestoreValue() }.toTypedArray()
+        mediaCollection(uid).document(mediaId)
+            .set(mapOf(FIELD_WATCHED_EPISODES to FieldValue.arrayRemove(*values)), SetOptions.merge())
+            .await()
     }
 
     // Écriture groupée pour le bootstrap (upload du suivi local pré-existant à la première

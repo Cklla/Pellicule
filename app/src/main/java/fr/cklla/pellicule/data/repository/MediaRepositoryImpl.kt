@@ -1,9 +1,13 @@
 package fr.cklla.pellicule.data.repository
 
+import fr.cklla.pellicule.data.local.EpisodeDao
 import fr.cklla.pellicule.data.local.MediaDao
 import fr.cklla.pellicule.data.local.entity.MediaEntity
+import fr.cklla.pellicule.data.local.entity.WatchedEpisodeEntity
 import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSource
+import fr.cklla.pellicule.data.remote.firestore.RemoteMedia
 import fr.cklla.pellicule.di.ApplicationScope
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.WatchStatus
@@ -38,6 +42,7 @@ import kotlinx.coroutines.sync.withLock
  */
 class MediaRepositoryImpl @Inject constructor(
     private val mediaDao: MediaDao,
+    private val episodeDao: EpisodeDao,
     private val firestoreDataSource: FirestoreMediaDataSource,
     private val authRepository: AuthRepository,
     private val timeSource: TimeSource,
@@ -48,6 +53,11 @@ class MediaRepositoryImpl @Inject constructor(
     // ça, un changement d'année et une édition de note lancés coup sur coup pourraient lire le même
     // état, et la seconde écriture restaurerait l'ancien `watchedAt`.
     private val writeMutex = Mutex()
+
+    // Contenus dont les épisodes locaux ont déjà été remontés vers Firestore depuis le lancement de
+    // l'app (voir `mirrorEpisodes`) : sans ça, une écriture refusée (règles pas encore publiées) serait
+    // rejouée à chaque snapshot, donc à l'infini.
+    private val episodesBackfilled = mutableSetOf<String>()
 
     init {
         // `collectLatest` : un changement d'utilisateur (déconnexion, ou reconnexion avec un autre
@@ -163,7 +173,7 @@ class MediaRepositoryImpl @Inject constructor(
     private suspend fun syncWith(uid: String) {
         bootstrapIfNeeded(uid)
         firestoreDataSource.observeMedia(uid)
-            .onEach { media -> mirrorIntoRoom(media) }
+            .onEach { media -> mirrorIntoRoom(uid, media) }
             .retryWhen { _, attempt ->
                 if (attempt >= MAX_SYNC_ATTEMPTS) {
                     false
@@ -203,11 +213,37 @@ class MediaRepositoryImpl @Inject constructor(
     // locales (voir `observeMedia`) — avec `insert`, chaque écho referait un DELETE+INSERT de
     // *toutes* les lignes du snapshot et supprimerait en cascade les `watched_episode` de tous les
     // contenus suivis, pas seulement celui qui vient de changer.
-    private suspend fun mirrorIntoRoom(remoteMedia: List<Media>) {
-        val remoteIds = remoteMedia.map { it.id }.toSet()
+    private suspend fun mirrorIntoRoom(uid: String, remoteMedia: List<RemoteMedia>) {
+        val remoteIds = remoteMedia.map { it.media.id }.toSet()
         val localIds = mediaDao.getAllIds()
         localIds.filter { it !in remoteIds }.forEach { mediaDao.deleteById(it) }
-        remoteMedia.forEach { mediaDao.upsert(it.toEntity()) }
+        remoteMedia.forEach { mediaDao.upsert(it.media.toEntity()) }
+        mirrorEpisodes(uid, remoteMedia)
+    }
+
+    // Épisodes vus : Firestore fait foi dès que le document porte le champ, ce qui restaure le suivi
+    // après une réinstallation, même pour une série disparue de Jellyfin. Un document sans le champ
+    // (créé avant que les épisodes soient synchronisés) ne vide jamais Room : au contraire, ses
+    // épisodes locaux sont remontés une fois. Appelé après l'upsert des contenus, les épisodes
+    // dépendant d'eux par clé étrangère. Une ligne n'est réécrite que si elle diffère, pour ne pas
+    // relancer les observateurs à chaque écho de snapshot.
+    private suspend fun mirrorEpisodes(uid: String, remoteMedia: List<RemoteMedia>) {
+        val localById = episodeDao.getAllWatchedOnce()
+            .groupBy({ it.mediaId }, { EpisodeKey(it.seasonNumber, it.episodeNumber) })
+            .mapValues { it.value.toSet() }
+        remoteMedia.forEach { (media, remoteEpisodes) ->
+            val local = localById[media.id].orEmpty()
+            if (remoteEpisodes == null) {
+                if (local.isNotEmpty() && episodesBackfilled.add(media.id)) {
+                    runCatching { firestoreDataSource.addWatchedEpisodes(uid, media.id, local) }
+                }
+            } else if (remoteEpisodes != local) {
+                episodeDao.replaceAllForMedia(
+                    media.id,
+                    remoteEpisodes.map { WatchedEpisodeEntity(media.id, it.seasonNumber, it.episodeNumber) },
+                )
+            }
+        }
     }
 
     // Écriture Firestore en best-effort : une erreur ici ne fait jamais échouer l'opération
