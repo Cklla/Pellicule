@@ -22,6 +22,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.HttpException
@@ -33,6 +34,18 @@ private fun unauthorizedException() =
 class JellyfinRepositoryImplTest {
 
     private val session = JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token-abc")
+
+    private val logged = mutableListOf<Triple<Int, String, Throwable?>>()
+    private val defaultSink = SyncLog.sink
+
+    init {
+        SyncLog.sink = { priority, message, error -> logged += Triple(priority, message, error) }
+    }
+
+    @After
+    fun restoreSyncLog() {
+        SyncLog.sink = defaultSink
+    }
 
     private fun repository(
         api: FakeJellyfinApi = FakeJellyfinApi(),
@@ -737,6 +750,76 @@ class JellyfinRepositoryImplTest {
 
         assertEquals(1, result.episodesMarkedPlayed)
         assertEquals(listOf("https://jellyfin.exemple.fr/Users/user-1/PlayedItems/jf-2-2"), api.playedUrls)
+    }
+
+    @Test
+    fun `un echec de synchro d'une serie est journalise avec son titre`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        addArcane(mediaRepository)
+        val failure = RuntimeException("serveur injoignable")
+        val api = apiWithRecreatedSeries().apply { error = failure }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        val (priority, message, error) = logged.single()
+        assertEquals(android.util.Log.WARN, priority)
+        assertTrue("Arcane" in message)
+        assertEquals(failure, error)
+    }
+
+    @Test
+    fun `un echec de synchro des films ou d'un envoi est journalise`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = addArcane(mediaRepository)
+        val movie = Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631)
+        val api = apiWithRecreatedSeries().apply { error = RuntimeException("réseau coupé") }
+        val repository = repository(api, FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedMovies(listOf(movie))
+        repository.pushEpisodeWatched(mediaRepository.observeMediaById(mediaId).first()!!, 2, 2, watched = true)
+
+        assertEquals(2, logged.size)
+        assertTrue(logged.all { it.first == android.util.Log.WARN })
+    }
+
+    @Test
+    fun `un 401 est journalise en plus d'effacer la session`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        addArcane(mediaRepository)
+        val sessionStore = FakeJellyfinSessionStore(session)
+        val api = apiWithRecreatedSeries().apply { error = unauthorizedException() }
+        val repository = repository(api, sessionStore, mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertEquals(1, logged.size)
+        assertNull(sessionStore.session.first())
+    }
+
+    @Test
+    fun `le remplacement d'un id Jellyfin perime est journalise sans echec`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        addArcane(mediaRepository)
+        val repository = repository(apiWithRecreatedSeries(), FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        val (priority, message, error) = logged.single()
+        assertEquals(android.util.Log.INFO, priority)
+        assertTrue("Arcane" in message)
+        assertNull(error)
+    }
+
+    @Test
+    fun `une synchro reussie ne journalise rien`() = runTest {
+        val mediaRepository = fakeMediaRepository(FakeMediaDao())
+        addArcane(mediaRepository, jellyfinId = "jf-new")
+        val repository = repository(apiWithRecreatedSeries(), FakeJellyfinSessionStore(session), mediaRepository)
+
+        repository.syncTrackedSeries(mediaRepository.observeMedia().first())
+
+        assertTrue(logged.isEmpty())
     }
 
     @Test

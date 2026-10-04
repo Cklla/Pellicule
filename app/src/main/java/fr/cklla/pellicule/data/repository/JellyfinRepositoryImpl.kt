@@ -70,7 +70,9 @@ class JellyfinRepositoryImpl @Inject constructor(
     override suspend fun syncTrackedSeries(items: List<Media>) {
         val current = session.value ?: return
         items.filter { it.type == MediaType.SERIE || it.type == MediaType.ANIME }
-            .forEach { media -> runCatching { syncSeries(current, media) }.onFailure(::disconnectIfUnauthorized) }
+            .forEach { media ->
+                runCatching { syncSeries(current, media) }.onFailure { handleFailure("synchro de la série « ${media.title} »", it) }
+            }
     }
 
     private suspend fun syncSeries(current: JellyfinSession, media: Media) {
@@ -164,7 +166,7 @@ class JellyfinRepositoryImpl @Inject constructor(
                     mediaRepository.updateMedia(media.copy(jellyfinId = item.id, status = newStatus))
                 }
             }
-        }.onFailure(::disconnectIfUnauthorized)
+        }.onFailure { handleFailure("synchro des films", it) }
     }
 
     override suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean) {
@@ -184,7 +186,7 @@ class JellyfinRepositoryImpl @Inject constructor(
             } else {
                 jellyfinApi.markUnplayed(url, authHeader(current.accessToken))
             }
-        }.onFailure(::disconnectIfUnauthorized)
+        }.onFailure { handleFailure("envoi de l'épisode vers Jellyfin", it) }
     }
 
     override suspend fun pushMovieWatched(media: Media, watched: Boolean) {
@@ -207,7 +209,7 @@ class JellyfinRepositoryImpl @Inject constructor(
             } else {
                 jellyfinApi.markUnplayed(url, authHeader(current.accessToken))
             }
-        }.onFailure(::disconnectIfUnauthorized)
+        }.onFailure { handleFailure("envoi du film vers Jellyfin", it) }
     }
 
     override suspend fun pushSeriesUnwatched(media: Media) {
@@ -233,7 +235,7 @@ class JellyfinRepositoryImpl @Inject constructor(
                         )
                     }
             }
-        }.onFailure(::disconnectIfUnauthorized)
+        }.onFailure { handleFailure("démarquage de la série sur Jellyfin", it) }
     }
 
     override suspend fun pushWatchedHistory(items: List<Media>): JellyfinPushHistoryResult {
@@ -259,7 +261,7 @@ class JellyfinRepositoryImpl @Inject constructor(
                     jellyfinApi.markPlayed(JellyfinApi.playedItemUrl(current.serverUrl, current.userId, item.id), authHeader(current.accessToken))
                     moviesMarkedPlayed++
                 }
-            }.onFailure(::disconnectIfUnauthorized)
+            }.onFailure { handleFailure("renvoi de l'historique des films", it) }
         }
 
         items.filter { it.type == MediaType.SERIE || it.type == MediaType.ANIME }
@@ -282,18 +284,21 @@ class JellyfinRepositoryImpl @Inject constructor(
                         jellyfinApi.markPlayed(JellyfinApi.playedItemUrl(current.serverUrl, current.userId, ep.id), authHeader(current.accessToken))
                         episodesMarkedPlayed++
                     }
-                }.onFailure(::disconnectIfUnauthorized)
+                }.onFailure { handleFailure("renvoi de l'historique d'une série", it) }
             }
 
         return JellyfinPushHistoryResult(moviesMarkedPlayed, episodesMarkedPlayed)
     }
 
     /**
-     * Un 401 sur un appel authentifié signifie que le token n'est plus valide côté serveur (révoqué,
-     * expiré) : on efface la session locale pour repasser l'app en "déconnecté" plutôt que de
-     * continuer à échouer silencieusement à chaque synchro sans jamais le signaler à l'utilisateur.
+     * Point d'arrivée de tous les échecs de synchro, qui sont volontairement avalés (un réseau ou un
+     * serveur indisponible ne doit jamais gêner le suivi local) : on les journalise pour qu'ils restent
+     * diagnostiquables. Un 401 sur un appel authentifié signifie en plus que le token n'est plus valide
+     * côté serveur (révoqué, expiré) : on efface la session locale pour repasser l'app en
+     * "déconnecté" plutôt que de continuer à échouer à chaque synchro sans jamais le signaler.
      */
-    private fun disconnectIfUnauthorized(error: Throwable) {
+    private fun handleFailure(operation: String, error: Throwable) {
+        SyncLog.warn("Jellyfin : $operation en échec", error)
         if (error is HttpException && error.code() == 401) {
             sessionStore.clear()
         }
@@ -337,6 +342,7 @@ class JellyfinRepositoryImpl @Inject constructor(
         } catch (error: HttpException) {
             if (error.code() != 404 || media.jellyfinId == null) throw error
             val freshId = resolveJellyfinId(current, media, refresh = true)?.takeIf { it != jellyfinId } ?: throw error
+            SyncLog.info("Jellyfin : id de « ${media.title} » périmé (404), remplacé par celui retrouvé via TMDB")
             block(freshId)
         }
     }
