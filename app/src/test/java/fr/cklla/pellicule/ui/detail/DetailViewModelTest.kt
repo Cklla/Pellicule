@@ -9,6 +9,7 @@ import fr.cklla.pellicule.data.repository.FakeJellyfinRepository
 import fr.cklla.pellicule.data.repository.FakeMediaDao
 import fr.cklla.pellicule.data.repository.FakeTvShowInfoRepository
 import fr.cklla.pellicule.data.repository.fakeMediaRepository
+import fr.cklla.pellicule.data.repository.toEntity
 import fr.cklla.pellicule.domain.model.AirDate
 import fr.cklla.pellicule.domain.model.EpisodeAirInfo
 import fr.cklla.pellicule.domain.model.EpisodeInfo
@@ -30,6 +31,8 @@ import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.usecase.SetEpisodeWatchedUseCase
 import fr.cklla.pellicule.domain.util.TimeSource
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -41,6 +44,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -745,6 +749,198 @@ class DetailViewModelTest {
 
         assertFalse(viewModel.uiState.value.reminderEnabled)
         assertTrue(reminders.getEnabledReminders().isEmpty())
+        collectorJob.cancel()
+    }
+
+    private fun millisUtc(year: Int, month: Int, day: Int) =
+        ZonedDateTime.of(year, month, day, 12, 0, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli()
+
+    private val clock = object : TimeSource {
+        override fun nowMillis() = now
+        override val zone = ZoneOffset.UTC
+    }
+
+    /** Insère directement en Room pour maîtriser `watchedAt` (le repository le dérive à l'écriture). */
+    private suspend fun seed(dao: FakeMediaDao, status: WatchStatus, watchedAt: Long?, releaseYear: Int? = 2023): String {
+        val media = Media(
+            id = "media-1",
+            title = "Dune",
+            type = MediaType.FILM,
+            status = status,
+            releaseYear = releaseYear,
+            watchedAt = watchedAt,
+        )
+        dao.insert(media.toEntity())
+        return media.id
+    }
+
+    @Test
+    fun `un contenu Vu affiche son annee de visionnage et les annees proposables`() = runTest {
+        val dao = FakeMediaDao()
+        val id = seed(dao, WatchStatus.VU, watchedAt = millisUtc(2025, 3, 1), releaseYear = 2023)
+
+        val viewModel = viewModelFor(id, fakeMediaRepository(dao, timeSource = clock))
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.canEditWatchedYear)
+        assertEquals(2025, state.watchedYear)
+        assertEquals(listOf(2026, 2025, 2024, 2023), state.watchedYearChoices)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `un contenu Vu sans date a une annee inconnue mais reste modifiable`() = runTest {
+        val dao = FakeMediaDao()
+        val id = seed(dao, WatchStatus.VU, watchedAt = null)
+
+        val viewModel = viewModelFor(id, fakeMediaRepository(dao, timeSource = clock))
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.canEditWatchedYear)
+        assertNull(viewModel.uiState.value.watchedYear)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `la ligne d'annee est absente hors statut Vu`() = runTest {
+        listOf(WatchStatus.A_VOIR, WatchStatus.EN_COURS).forEach { status ->
+            val dao = FakeMediaDao()
+            val id = seed(dao, status, watchedAt = null)
+
+            val viewModel = viewModelFor(id, fakeMediaRepository(dao, timeSource = clock))
+            val collectorJob = launch { viewModel.uiState.collect {} }
+            dispatcher.scheduler.advanceUntilIdle()
+
+            assertFalse("$status", viewModel.uiState.value.canEditWatchedYear)
+            assertTrue("$status", viewModel.uiState.value.watchedYearChoices.isEmpty())
+            collectorJob.cancel()
+        }
+    }
+
+    @Test
+    fun `la ligne d'annee est absente sur l'apercu d'un contenu pas encore suivi`() = runTest {
+        val viewModel = previewViewModelFor(fakeMediaRepository(FakeMediaDao(), timeSource = clock))
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.canEditWatchedYear)
+        assertTrue(viewModel.uiState.value.watchedYearChoices.isEmpty())
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `choisir une annee met a jour l'affichage et la valeur persistee`() = runTest {
+        val dao = FakeMediaDao()
+        val id = seed(dao, WatchStatus.VU, watchedAt = millisUtc(2026, 3, 1))
+        val repository = fakeMediaRepository(dao, timeSource = clock)
+
+        val viewModel = viewModelFor(id, repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onWatchedYearSelected(2024)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2024, viewModel.uiState.value.watchedYear)
+        assertEquals(millisUtc(2024, 7, 1), repository.observeMediaById(id).first()?.watchedAt)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `une annee donnee a un contenu sans date s'affiche`() = runTest {
+        val dao = FakeMediaDao()
+        val id = seed(dao, WatchStatus.VU, watchedAt = null)
+
+        val viewModel = viewModelFor(id, fakeMediaRepository(dao, timeSource = clock))
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onWatchedYearSelected(2025)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2025, viewModel.uiState.value.watchedYear)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `une edition de la note apres le choix d'une annee ne ramene pas l'ancienne valeur`() = runTest {
+        val dao = FakeMediaDao()
+        val id = seed(dao, WatchStatus.VU, watchedAt = millisUtc(2026, 3, 1))
+        val repository = fakeMediaRepository(dao, timeSource = clock)
+
+        val viewModel = viewModelFor(id, repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onWatchedYearSelected(2024)
+        viewModel.onRatingSelected(4)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2024, viewModel.uiState.value.watchedYear)
+        assertEquals(millisUtc(2024, 7, 1), repository.observeMediaById(id).first()?.watchedAt)
+        assertEquals(4, repository.observeMediaById(id).first()?.rating)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `choisir une annee hors statut Vu est ignore`() = runTest {
+        val dao = FakeMediaDao()
+        val id = seed(dao, WatchStatus.EN_COURS, watchedAt = null)
+        val repository = fakeMediaRepository(dao, timeSource = clock)
+
+        val viewModel = viewModelFor(id, repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onWatchedYearSelected(2024)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(repository.observeMediaById(id).first()?.watchedAt)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `passer un contenu a Vu depuis la fiche affiche tout de suite une annee`() = runTest {
+        val dao = FakeMediaDao()
+        val id = seed(dao, WatchStatus.A_VOIR, watchedAt = null)
+
+        val viewModel = viewModelFor(id, fakeMediaRepository(dao, timeSource = clock))
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onStatusSelected(WatchStatus.VU)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.canEditWatchedYear)
+        assertNotNull(viewModel.uiState.value.watchedYear)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `quitter Vu efface l'annee choisie et repasser en Vu ne la retrouve pas`() = runTest {
+        val dao = FakeMediaDao()
+        val id = seed(dao, WatchStatus.VU, watchedAt = millisUtc(2026, 3, 1))
+        val repository = fakeMediaRepository(dao, timeSource = clock)
+
+        val viewModel = viewModelFor(id, repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onWatchedYearSelected(2024)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onStatusSelected(WatchStatus.EN_COURS)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.canEditWatchedYear)
+        assertNull(repository.observeMediaById(id).first()?.watchedAt)
+
+        viewModel.onStatusSelected(WatchStatus.VU)
+        dispatcher.scheduler.advanceUntilIdle()
+        val year = viewModel.uiState.value.watchedYear
+        assertNotNull(year)
+        assertTrue(year != 2024)
         collectorJob.cancel()
     }
 }

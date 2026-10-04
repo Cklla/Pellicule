@@ -17,8 +17,9 @@ package fr.cklla.pellicule.domain.model
  * @param watchedAt horodatage (epoch millis) du passage au statut [WatchStatus.VU], `null` tant
  *   que ce statut n'a jamais été atteint. Distinct de [releaseYear] : sert à filtrer par année de
  *   *visionnage* plutôt que par année de sortie du contenu. Dérivé automatiquement par le
- *   Repository à chaque transition de statut (voir `MediaRepositoryImpl.resolveWatchedAt`),
- *   jamais renseigné à la main par l'UI.
+ *   Repository à chaque transition de statut (voir `MediaRepositoryImpl.resolveWatchedAt`) ; seule
+ *   exception, l'année peut être corrigée à la main via `MediaRepository.setWatchedYear`, tant que
+ *   le contenu reste au statut Vu. Effacé dès que le statut quitte [WatchStatus.VU].
  */
 data class Media(
     val id: String = "",

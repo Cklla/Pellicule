@@ -4,6 +4,8 @@ import fr.cklla.pellicule.domain.calendar.NextAiring
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.Season
 import fr.cklla.pellicule.domain.model.WatchAvailability
+import fr.cklla.pellicule.domain.model.WatchStatus
+import fr.cklla.pellicule.ui.bibliotheque.watchedYear
 
 data class DetailUiState(
     val isLoading: Boolean = true,
@@ -25,6 +27,8 @@ data class DetailUiState(
     val episodes: List<EpisodeUiModel> = emptyList(),
     val episodesLoading: Boolean = false,
     val episodesErrorMessage: String? = null,
+    /** Années proposées par le choix d'année de visionnage (récente d'abord) ; vide hors [canEditWatchedYear]. */
+    val watchedYearChoices: List<Int> = emptyList(),
 ) {
     /**
      * Vrai une fois le contenu réellement présent dans le suivi (id non vide). Faux quand la
@@ -33,4 +37,14 @@ data class DetailUiState(
      * un bouton "Ajouter" à la place.
      */
     val isInBacklog: Boolean get() = !media?.id.isNullOrEmpty()
+
+    /** Vrai quand la ligne « Vu en … » est affichée : contenu suivi, au statut Vu. */
+    val canEditWatchedYear: Boolean get() = media.canEditWatchedYear()
+
+    /** Année de visionnage enregistrée, ou `null` si inconnue (contenu passé en Vu avant que la date soit conservée). */
+    val watchedYear: Int? get() = media?.let(::watchedYear)
 }
+
+/** Seul un contenu réellement suivi et au statut Vu a une année de visionnage modifiable. */
+internal fun Media?.canEditWatchedYear(): Boolean =
+    this != null && id.isNotEmpty() && status == WatchStatus.VU

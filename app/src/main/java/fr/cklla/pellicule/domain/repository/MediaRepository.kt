@@ -25,6 +25,13 @@ interface MediaRepository {
     /** Met à jour un contenu existant (statut, etc.). */
     suspend fun updateMedia(media: Media): Resource<Unit>
 
+    /**
+     * Classe un contenu déjà vu dans l'année de visionnage [year] (voir `watchedAtForYear` pour
+     * l'horodatage retenu). Sans effet si le contenu n'existe pas, n'est pas au statut Vu, ou si
+     * [year] est future ou antérieure à sa sortie. Réutilisable tel quel pour plusieurs contenus.
+     */
+    suspend fun setWatchedYear(mediaId: String, year: Int): Resource<Unit>
+
     /** Retire un contenu du suivi. */
     suspend fun deleteMedia(id: String): Resource<Unit>
 }

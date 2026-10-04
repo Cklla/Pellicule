@@ -27,6 +27,7 @@ import fr.cklla.pellicule.domain.repository.TvShowInfoRepository
 import fr.cklla.pellicule.domain.repository.WatchProvidersRepository
 import fr.cklla.pellicule.domain.usecase.SetEpisodeWatchedUseCase
 import fr.cklla.pellicule.domain.util.TimeSource
+import fr.cklla.pellicule.domain.util.selectableWatchedYears
 import fr.cklla.pellicule.ui.navigation.PelliculeDestinations
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -252,6 +253,10 @@ class DetailViewModel @Inject constructor(
             episodes = episodesState.episodes,
             episodesLoading = episodesState.isLoading,
             episodesErrorMessage = episodesState.errorMessage,
+            watchedYearChoices = mediaState.media
+                ?.takeIf { it.canEditWatchedYear() }
+                ?.let { selectableWatchedYears(it.releaseYear, timeSource) }
+                .orEmpty(),
         )
     }.stateIn(
         scope = viewModelScope,
@@ -267,6 +272,34 @@ class DetailViewModel @Inject constructor(
         applyEdit { it.copy(status = status) }
         if (previousStatus == WatchStatus.VU && status != WatchStatus.VU) {
             resetWatchedOnJellyfin()
+        }
+    }
+
+    /**
+     * Classe le contenu dans l'année de visionnage [year]. L'écriture et le calcul de l'horodatage
+     * sont ceux du repository ([MediaRepository.setWatchedYear]) ; la copie de travail reprend
+     * ensuite la valeur réellement persistée, pour que l'affichage et les éditions suivantes (note,
+     * statut) partent de la bonne date.
+     */
+    fun onWatchedYearSelected(year: Int) {
+        val media = workingMedia.value?.takeIf { it.canEditWatchedYear() } ?: return
+        viewModelScope.launch {
+            mediaRepository.setWatchedYear(media.id, year)
+            refreshWatchedAt(media.id)
+        }
+    }
+
+    // `watchedAt` est posé par le repository (transition de statut, choix d'une année), jamais par
+    // la copie de travail : sans cette relecture, la fiche afficherait l'état d'avant l'écriture
+    // (« année inconnue » juste après être passé à Vu, ancienne année après un choix). Ignorée si le
+    // statut persisté diffère déjà de la copie de travail (une autre édition est en cours) : la
+    // relecture de cette édition-là prendra le relais.
+    private suspend fun refreshWatchedAt(id: String) {
+        val persisted = mediaRepository.observeMediaById(id).first() ?: return
+        workingMedia.update { current ->
+            current?.takeIf { it.id == persisted.id && it.status == persisted.status }
+                ?.copy(watchedAt = persisted.watchedAt)
+                ?: current
         }
     }
 
@@ -353,7 +386,10 @@ class DetailViewModel @Inject constructor(
         // Pas encore ajoutée au suivi : rien à persister, seule la copie de travail locale change
         // (voir `onAddMedia`, qui écrit pour la première fois).
         if (updated.id.isEmpty()) return
-        viewModelScope.launch { mediaRepository.updateMedia(updated) }
+        viewModelScope.launch {
+            mediaRepository.updateMedia(updated)
+            refreshWatchedAt(updated.id)
+        }
     }
 
     private fun SavedStateHandle.toPreviewResult(): MediaSearchResult? {
