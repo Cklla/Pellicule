@@ -44,8 +44,11 @@ optionnelle avec un serveur Jellyfin.
   anime elle peut différer d'un jour en France.
 - **Statistiques** : depuis l'onglet Compte, nombre de contenus vus et répartition par type (film,
   série, anime) sous forme d'anneau avec légende, filtrables par année de visionnage et par type.
-  Les contenus passés en Vu avant l'introduction de la date de visionnage n'ont pas d'année : ils ne
-  comptent que sous « Toutes les années ».
+  Les contenus passés en Vu avant l'introduction de la date de visionnage n'ont pas d'année tant qu'on
+  ne leur en donne pas une depuis leur fiche : ils ne comptent que sous « Toutes les années ».
+- **Année de visionnage** : sur la fiche d'un contenu Vu, la ligne « Vu en 2026 / Modifier » permet de le
+  classer dans une autre année (de l'année en cours à l'année de sortie), pour le filtre de la
+  Bibliothèque, les statistiques et le récap. Repasser le contenu hors de Vu efface l'année choisie.
 - **Récap annuel** : du 25 décembre au 31 janvier, une carte « Récap <année> » apparaît dans l'onglet
   Compte (l'année en cours fin décembre, l'année écoulée en janvier, rien le reste de l'année). Elle
   ouvre le bilan de l'année : total de contenus vus et compteur par type, chacun menant à la liste
@@ -313,6 +316,9 @@ app/src/main/java/fr/cklla/pellicule/
   d'après la date de l'appareil et les dates TMDB en cache ; pas de Firebase Cloud Messaging. Les
   rappels vivent uniquement dans Room (propres à l'appareil, jamais synchronisés), et une seule
   notification part par épisode.
+- **Année de visionnage choisie à la main stockée au 1er juillet à midi** : une année passée est
+  enregistrée comme un horodatage au milieu de l'année, pour que sa relecture donne la même année quel
+  que soit le fuseau de l'appareil. Aucun champ ni migration : c'est le `watchedAt` existant.
 - **Notification du récap annuel locale, une fois par année** : même mécanique que les rappels
   d'épisodes (job WorkManager quotidien, date de l'appareil, pas de FCM). Le drapeau « déjà notifié
   pour l'année X » vit dans les `SharedPreferences`, et n'est posé que si la notification a réellement
