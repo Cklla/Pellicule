@@ -3,6 +3,7 @@ package fr.cklla.pellicule.data.repository
 import fr.cklla.pellicule.data.local.MediaDao
 import fr.cklla.pellicule.data.remote.firestore.FakeFirestoreMediaDataSource
 import fr.cklla.pellicule.domain.repository.MediaRepository
+import fr.cklla.pellicule.domain.util.TimeSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -17,9 +18,11 @@ fun fakeMediaRepository(
     dao: MediaDao,
     firestoreDataSource: FakeFirestoreMediaDataSource = FakeFirestoreMediaDataSource(),
     authRepository: FakeAuthRepository = FakeAuthRepository(),
+    timeSource: TimeSource = TimeSource { System.currentTimeMillis() },
 ): MediaRepository = MediaRepositoryImpl(
     mediaDao = dao,
     firestoreDataSource = firestoreDataSource,
     authRepository = authRepository,
+    timeSource = timeSource,
     repositoryScope = CoroutineScope(UnconfinedTestDispatcher()),
 )

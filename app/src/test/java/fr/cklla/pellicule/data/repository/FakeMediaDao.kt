@@ -17,6 +17,7 @@ class FakeMediaDao : MediaDao {
 
     /** Permet de simuler un échec Room (contrainte violée, disque plein...) dans les tests. */
     var shouldThrowOnInsert = false
+    var shouldThrowOnUpdate = false
 
     override fun observeAll(): Flow<List<MediaEntity>> = media
 
@@ -29,6 +30,7 @@ class FakeMediaDao : MediaDao {
     }
 
     override suspend fun update(media: MediaEntity) {
+        if (shouldThrowOnUpdate) error("Échec Room simulé")
         this.media.update { list -> list.map { if (it.id == media.id) media else it } }
     }
 

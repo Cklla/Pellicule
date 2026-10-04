@@ -9,6 +9,8 @@ import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.domain.repository.AuthRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
+import fr.cklla.pellicule.domain.util.TimeSource
+import fr.cklla.pellicule.domain.util.watchedAtForYear
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +25,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Implémentation Room + Firestore du [MediaRepository].
@@ -36,8 +40,14 @@ class MediaRepositoryImpl @Inject constructor(
     private val mediaDao: MediaDao,
     private val firestoreDataSource: FirestoreMediaDataSource,
     private val authRepository: AuthRepository,
+    private val timeSource: TimeSource,
     @ApplicationScope private val repositoryScope: CoroutineScope,
 ) : MediaRepository {
+
+    // Sérialise les lectures-puis-écritures de la ligne Room (`updateMedia`, `setWatchedYear`) : sans
+    // ça, un changement d'année et une édition de note lancés coup sur coup pourraient lire le même
+    // état, et la seconde écriture restaurerait l'ancien `watchedAt`.
+    private val writeMutex = Mutex()
 
     init {
         // `collectLatest` : un changement d'utilisateur (déconnexion, ou reconnexion avec un autre
@@ -78,13 +88,30 @@ class MediaRepositoryImpl @Inject constructor(
     )
 
     override suspend fun updateMedia(media: Media): Resource<Unit> = runCatching {
-        val previous = mediaDao.getByIdOnce(media.id)
-        val mediaToPersist = media.copy(watchedAt = resolveWatchedAt(previous, media.status))
-        mediaDao.update(mediaToPersist.toEntity())
+        val mediaToPersist = writeMutex.withLock {
+            val previous = mediaDao.getByIdOnce(media.id)
+            media.copy(watchedAt = resolveWatchedAt(previous, media.status))
+                .also { mediaDao.update(it.toEntity()) }
+        }
         pushToFirestore { uid -> firestoreDataSource.upsertMedia(uid, mediaToPersist) }
     }.fold(
         onSuccess = { Resource.Success(Unit) },
         onFailure = { Resource.Error("Impossible de mettre à jour ce contenu.", it) },
+    )
+
+    override suspend fun setWatchedYear(mediaId: String, year: Int): Resource<Unit> = runCatching {
+        val updated = writeMutex.withLock {
+            val entity = mediaDao.getByIdOnce(mediaId)?.takeIf { it.status == WatchStatus.VU.name }
+                ?: return@runCatching
+            val watchedAt = watchedAtForYear(year, entity.watchedAt, entity.releaseYear, timeSource)
+                ?.takeIf { it != entity.watchedAt }
+                ?: return@runCatching
+            entity.copy(watchedAt = watchedAt).also { mediaDao.update(it) }
+        }
+        pushToFirestore { uid -> firestoreDataSource.upsertMedia(uid, updated.toDomain()) }
+    }.fold(
+        onSuccess = { Resource.Success(Unit) },
+        onFailure = { Resource.Error("Impossible de modifier l'année de visionnage.", it) },
     )
 
     // Dérive automatiquement la date de visionnage à chaque transition de statut, plutôt que de
@@ -98,8 +125,9 @@ class MediaRepositoryImpl @Inject constructor(
     // de travail locale serait sinon écrasé par `null` au prochain appel.
     //
     // Horodatage posé une seule fois à l'entrée dans VU (pas de re-timestamp si déjà VU, sinon
-    // éditer la note ou re-synchroniser Jellyfin déplacerait la date de visionnage à chaque fois),
-    // effacé dès que le contenu quitte VU (redevient pertinent le jour où il y repasse).
+    // éditer la note ou re-synchroniser Jellyfin déplacerait la date de visionnage à chaque fois,
+    // et écraserait une année choisie à la main par `setWatchedYear`), effacé dès que le contenu
+    // quitte VU (redevient pertinent le jour où il y repasse).
     private fun resolveWatchedAt(previous: MediaEntity?, newStatus: WatchStatus): Long? {
         val previousStatus = previous?.status?.let { runCatching { WatchStatus.valueOf(it) }.getOrNull() }
         return when {
