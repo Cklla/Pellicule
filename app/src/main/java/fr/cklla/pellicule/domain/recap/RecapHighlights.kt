@@ -2,8 +2,9 @@ package fr.cklla.pellicule.domain.recap
 
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
-import fr.cklla.pellicule.domain.model.WatchStatus
-import fr.cklla.pellicule.ui.bibliotheque.watchedYear
+import fr.cklla.pellicule.ui.bibliotheque.BibliothequeFilter
+import fr.cklla.pellicule.ui.bibliotheque.filterMedia
+import fr.cklla.pellicule.ui.stats.computeStats
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -32,7 +33,7 @@ fun favoritesGridColumns(count: Int): Int = if (count <= FAVORITES_TWO_COLUMNS_M
 
 /** Contenus au statut Vu d'une année, tous types confondus. */
 private fun watchedIn(media: List<Media>, year: Int): List<Media> =
-    media.filter { it.status == WatchStatus.VU && watchedYear(it) == year }
+    filterMedia(media, BibliothequeFilter.VU, year)
 
 private val mostRecentlyWatchedFirst: Comparator<Media> =
     compareByDescending<Media> { it.watchedAt ?: Long.MIN_VALUE }.thenBy { it.id }
@@ -161,14 +162,14 @@ sealed interface RecapSlide {
 fun buildRecapSlides(media: List<Media>, year: Int, zone: ZoneId): List<RecapSlide> {
     val watched = watchedIn(media, year)
     if (watched.isEmpty()) return emptyList()
-    val countsByType = MediaType.entries.associateWith { type -> watched.count { it.type == type } }
+    val stats = computeStats(media, selectedYear = year)
     val facts = computeRecapFacts(media, year, zone)
     return buildList {
-        add(RecapSlide.Total(year = year, total = watched.size, countsByType = countsByType))
+        add(RecapSlide.Total(year = year, total = stats.watchedCount, countsByType = stats.countsByType))
         MediaType.entries.forEach { type ->
             val favorites = selectFavorites(media, year, type)
             if (favorites.isNotEmpty()) {
-                add(RecapSlide.TypeFavorites(type, watchedCount = countsByType.getValue(type), favorites = favorites))
+                add(RecapSlide.TypeFavorites(type, watchedCount = stats.countsByType.getValue(type), favorites = favorites))
             }
         }
         if (!facts.isEmpty) add(RecapSlide.Facts(facts))
