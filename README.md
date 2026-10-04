@@ -97,7 +97,8 @@ Optionnelle, activée depuis l'écran **Compte** avec l'URL du serveur et un ide
 (pas de clé API admin ni de plugin). Authentification et statut vu passent par des routes core de
 l'API ; un contenu est relié à son équivalent Jellyfin par son identifiant TMDB. Le mot de passe
 n'est jamais stocké : seule la session est conservée, chiffrée sur l'appareil. Le pull depuis
-Jellyfin ne peut qu'ajouter du vu, jamais en retirer.
+Jellyfin ne peut qu'ajouter du vu, jamais en retirer. Une série déjà vue repasse « En cours » quand
+le serveur reçoit des épisodes postérieurs au dernier épisode vu (nouvelle saison).
 
 ## Tests
 
