@@ -4,11 +4,11 @@ package fr.cklla.pellicule.domain.model
  * Représente un contenu (film, série ou anime) suivi par l'utilisateur, tel que manipulé par
  * l'UI et les ViewModels.
  *
- * C'est le modèle "métier" : il ne dépend ni de Room (entité base de données) ni de Firestore, ni
+ * C'est le modèle "métier" : il ne dépend ni de Room (entité base de données) ni du serveur, ni
  * de TMDB (réponse API). Le Repository fait la conversion entre ces représentations et ce modèle.
  *
  * @param id identifiant du contenu (UUID généré à la création) — chaîne vide si pas encore
- *   persisté. Sert aussi d'identifiant de document Firestore une fois la synchro cloud en place.
+ *   persisté. Sert aussi d'identifiant de la ligne côté serveur.
  * @param tmdbId identifiant TMDB du contenu, ou `null` si ajouté sans passer par la recherche.
  * @param jellyfinId identifiant de l'item correspondant sur le serveur Jellyfin connecté, résolu
  *   et mis en cache une fois trouvé (voir `JellyfinRepository`) — `null` tant que la résolution

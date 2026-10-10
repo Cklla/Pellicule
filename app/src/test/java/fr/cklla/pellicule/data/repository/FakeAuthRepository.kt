@@ -58,7 +58,9 @@ class FakeAuthRepository(
 
     /** Simule une connexion déjà effective, sans passer par le flow [signIn] (Credential Manager). */
     fun signInAs(user: AuthUser) {
-        _currentUser.value = user
+        // L'état avant l'utilisateur, comme en production où `currentUser` en est dérivé : un
+        // collecteur de `currentUser` réveillé ici doit déjà voir l'état « connecté ».
         _authState.value = AuthState.SignedIn(user)
+        _currentUser.value = user
     }
 }

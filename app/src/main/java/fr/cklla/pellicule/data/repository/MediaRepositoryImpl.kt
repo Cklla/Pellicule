@@ -1,14 +1,16 @@
 package fr.cklla.pellicule.data.repository
 
-import fr.cklla.pellicule.data.local.EpisodeDao
 import fr.cklla.pellicule.data.local.MediaDao
+import fr.cklla.pellicule.data.local.OutboxDao
+import fr.cklla.pellicule.data.local.TransactionRunner
 import fr.cklla.pellicule.data.local.entity.MediaEntity
-import fr.cklla.pellicule.data.local.entity.WatchedEpisodeEntity
-import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSource
-import fr.cklla.pellicule.data.remote.firestore.RemoteMedia
+import fr.cklla.pellicule.data.remote.RemoteMediaDataSource
+import fr.cklla.pellicule.data.sync.MediaSyncer
+import fr.cklla.pellicule.data.sync.OutboxScheduler
+import fr.cklla.pellicule.data.sync.enqueueDelete
+import fr.cklla.pellicule.data.sync.enqueueUpsert
 import fr.cklla.pellicule.di.ApplicationScope
 import fr.cklla.pellicule.domain.model.AuthUser
-import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.model.WatchStatus
@@ -21,11 +23,12 @@ import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
@@ -40,17 +43,21 @@ private sealed interface AuthEvent {
 }
 
 /**
- * Implémentation Room + Firestore du [MediaRepository].
+ * Implémentation Room + Supabase du [MediaRepository].
  *
- * Room reste l'unique source lue par l'UI (`observeMedia`/`observeMediaById`, UX offline-first,
- * pas de flicker si Firestore est temporairement indisponible). Firestore devient la source de
- * vérité dès que la synchro démarre : un listener temps réel mirrore en continu son contenu vers
- * Room, et les écritures locales sont répercutées vers Firestore en best-effort.
+ * Room reste l'unique source lue par l'UI (`observeMedia`/`observeMediaById`, UX offline-first, pas de
+ * flicker si le serveur est indisponible). Toute écriture locale est enregistrée dans Room et dans la
+ * file d'envoi (`pending_operation`) dans une même transaction, puis envoyée par [MediaSyncer] dès que
+ * le réseau le permet. Le serveur est la source de vérité : l'écoute temps réel sert de signal pour
+ * recopier son état dans Room, sans jamais toucher à ce qui attend d'être envoyé.
  */
 class MediaRepositoryImpl @Inject constructor(
     private val mediaDao: MediaDao,
-    private val episodeDao: EpisodeDao,
-    private val firestoreDataSource: FirestoreMediaDataSource,
+    private val outboxDao: OutboxDao,
+    private val transactions: TransactionRunner,
+    private val remoteDataSource: RemoteMediaDataSource,
+    private val syncer: MediaSyncer,
+    private val outboxScheduler: OutboxScheduler,
     private val authRepository: AuthRepository,
     private val timeSource: TimeSource,
     @ApplicationScope private val repositoryScope: CoroutineScope,
@@ -61,18 +68,12 @@ class MediaRepositoryImpl @Inject constructor(
     // état, et la seconde écriture restaurerait l'ancien `watchedAt`.
     private val writeMutex = Mutex()
 
-    // Contenus dont les épisodes locaux ont déjà été remontés vers Firestore depuis le lancement de
-    // l'app (voir `mirrorEpisodes`) : sans ça, une écriture refusée (règles pas encore publiées) serait
-    // rejouée à chaque snapshot, donc à l'infini.
-    private val episodesBackfilled = mutableSetOf<String>()
-
     init {
         // `collectLatest` : un changement d'utilisateur (déconnexion, ou reconnexion avec un autre
-        // compte) annule proprement l'écoute Firestore précédente avant d'en démarrer une nouvelle.
-        // La purge passe par le même collecteur pour ne jamais tourner en même temps qu'un miroir
-        // en cours. Elle n'est déclenchée que par la déconnexion demandée : un `currentUser` à
-        // `null` est aussi l'état avant le chargement de la session, et effacerait Room à chaque
-        // lancement.
+        // compte) annule proprement la synchro précédente avant d'en démarrer une nouvelle. La purge
+        // passe par le même collecteur pour ne jamais tourner en même temps qu'un miroir en cours.
+        // Elle n'est déclenchée que par la déconnexion demandée : un `currentUser` à `null` est aussi
+        // l'état avant le chargement de la session, et effacerait Room à chaque lancement.
         repositoryScope.launch {
             merge(
                 authRepository.currentUser.map { AuthEvent.UserChanged(it) },
@@ -80,7 +81,7 @@ class MediaRepositoryImpl @Inject constructor(
             ).collectLatest { event ->
                 when (event) {
                     AuthEvent.SignedOut -> clearLocalData()
-                    is AuthEvent.UserChanged -> event.user?.let { syncWith(it.uid) }
+                    is AuthEvent.UserChanged -> if (event.user != null) syncWithServer()
                 }
             }
         }
@@ -89,21 +90,24 @@ class MediaRepositoryImpl @Inject constructor(
     override fun observeMedia(): Flow<List<Media>> =
         mediaDao.observeAll()
             .map { entities -> entities.map { it.toDomain() } }
-            // Un miroir Firestore -> Room réémet souvent une liste identique (écho de l'écriture
-            // locale elle-même avant confirmation serveur) : éviter les recompositions inutiles.
+            // Un miroir serveur -> Room réémet souvent une liste identique (écho de l'écriture
+            // locale elle-même) : éviter les recompositions inutiles.
             .distinctUntilChanged()
 
     override fun observeMediaById(id: String): Flow<Media?> =
         mediaDao.observeById(id).map { it?.toDomain() }
 
     // Le UUID est généré ici, avant la première écriture, plutôt que délégué à Room (qui ne sait
-    // pas auto-générer un id texte) : c'est aussi le seul endroit qui écrit à la fois dans Room et
-    // dans Firestore, les deux doivent donc partager exactement le même id.
+    // pas auto-générer un id texte) : Room et le serveur doivent partager exactement le même id, et
+    // c'est lui qui rend le rejeu d'un envoi idempotent.
     override suspend fun addMedia(media: Media): Resource<String> = runCatching {
         val id = media.id.ifBlank { UUID.randomUUID().toString() }
         val mediaWithId = media.copy(id = id, watchedAt = resolveWatchedAt(previous = null, newStatus = media.status))
-        mediaDao.insert(mediaWithId.toEntity())
-        pushToFirestore { uid -> firestoreDataSource.upsertMedia(uid, mediaWithId) }
+        transactions.run {
+            mediaDao.insert(mediaWithId.toEntity())
+            outboxDao.enqueueUpsert(id)
+        }
+        outboxScheduler.requestFlush()
         id
     }.fold(
         onSuccess = { Resource.Success(it) },
@@ -111,27 +115,33 @@ class MediaRepositoryImpl @Inject constructor(
     )
 
     override suspend fun updateMedia(media: Media): Resource<Unit> = runCatching {
-        val mediaToPersist = writeMutex.withLock {
-            val previous = mediaDao.getByIdOnce(media.id)
-            media.copy(watchedAt = resolveWatchedAt(previous, media.status))
-                .also { mediaDao.update(it.toEntity()) }
+        writeMutex.withLock {
+            transactions.run {
+                val previous = mediaDao.getByIdOnce(media.id)
+                mediaDao.update(media.copy(watchedAt = resolveWatchedAt(previous, media.status)).toEntity())
+                outboxDao.enqueueUpsert(media.id)
+            }
         }
-        pushToFirestore { uid -> firestoreDataSource.upsertMedia(uid, mediaToPersist) }
+        outboxScheduler.requestFlush()
     }.fold(
         onSuccess = { Resource.Success(Unit) },
         onFailure = { Resource.Error("Impossible de mettre à jour ce contenu.", it) },
     )
 
     override suspend fun setWatchedYear(mediaId: String, year: Int): Resource<Unit> = runCatching {
-        val updated = writeMutex.withLock {
-            val entity = mediaDao.getByIdOnce(mediaId)?.takeIf { it.status == WatchStatus.VU.name }
-                ?: return@runCatching
-            val watchedAt = watchedAtForYear(year, entity.watchedAt, entity.releaseYear, timeSource)
-                ?.takeIf { it != entity.watchedAt }
-                ?: return@runCatching
-            entity.copy(watchedAt = watchedAt).also { mediaDao.update(it) }
+        val changed = writeMutex.withLock {
+            transactions.run {
+                val entity = mediaDao.getByIdOnce(mediaId)?.takeIf { it.status == WatchStatus.VU.name }
+                    ?: return@run false
+                val watchedAt = watchedAtForYear(year, entity.watchedAt, entity.releaseYear, timeSource)
+                    ?.takeIf { it != entity.watchedAt }
+                    ?: return@run false
+                mediaDao.update(entity.copy(watchedAt = watchedAt))
+                outboxDao.enqueueUpsert(mediaId)
+                true
+            }
         }
-        pushToFirestore { uid -> firestoreDataSource.upsertMedia(uid, updated.toDomain()) }
+        if (changed) outboxScheduler.requestFlush()
     }.fold(
         onSuccess = { Resource.Success(Unit) },
         onFailure = { Resource.Error("Impossible de modifier l'année de visionnage.", it) },
@@ -161,116 +171,57 @@ class MediaRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteMedia(id: String): Resource<Unit> = runCatching {
-        mediaDao.deleteById(id)
-        pushToFirestore { uid -> firestoreDataSource.deleteMedia(uid, id) }
+        transactions.run {
+            mediaDao.deleteById(id)
+            outboxDao.enqueueDelete(id)
+        }
+        outboxScheduler.requestFlush()
     }.fold(
         onSuccess = { Resource.Success(Unit) },
         onFailure = { Resource.Error("Impossible de retirer ce contenu du suivi.", it) },
     )
 
-    // Ne laisse rien du compte précédent sur l'appareil : la base Room, mais aussi le cache que
-    // le SDK Firestore tient de son côté. Enveloppé dans un runCatching parce qu'une exception
-    // ici (base verrouillée, purge Firestore refusée) annulerait le collecteur de `currentUser`
-    // et couperait la synchro pour tout le reste de la vie du process.
+    // Ne laisse rien du compte précédent sur l'appareil : ni la base Room, ni les écritures en
+    // attente (elles partiraient sinon sur le compte suivant). Enveloppé dans un runCatching parce
+    // qu'une exception ici (base verrouillée) annulerait le collecteur de `currentUser` et couperait
+    // la synchro pour tout le reste de la vie du process.
     private suspend fun clearLocalData() {
-        runCatching {
-            mediaDao.clearAll()
-            firestoreDataSource.clearLocalCache()
-        }
+        runCatching { syncer.clearLocalData() }
     }
 
-    // Une erreur Firestore (réseau, règles de sécurité, quota) termine le flux d'écoute. Sans le
-    // retry ci-dessous, la synchro s'arrêtait définitivement au premier incident, sans que rien
-    // ne le signale : l'app continuait à tourner sur le seul contenu de Room, et il fallait la
-    // relancer pour qu'elle se resynchronise.
-    private suspend fun syncWith(uid: String) {
-        bootstrapIfNeeded(uid)
-        firestoreDataSource.observeMedia(uid)
-            .onEach { media -> mirrorIntoRoom(uid, media) }
-            .retryWhen { _, attempt ->
-                if (attempt >= MAX_SYNC_ATTEMPTS) {
-                    false
-                } else {
-                    // Délai croissant : inutile de marteler Firestore si l'erreur est durable
-                    // (pas de réseau, règles qui refusent l'accès...).
-                    delay(RETRY_DELAY_MILLIS * (attempt + 1))
-                    true
-                }
+    // Une erreur de lecture (réseau, serveur) ou de l'écoute temps réel termine le flux. Sans le
+    // retry ci-dessous, la synchro s'arrêtait définitivement au premier incident, sans que rien ne le
+    // signale. Le délai croît jusqu'à un plafond mais les tentatives ne s'arrêtent jamais : une app
+    // lancée hors ligne doit se synchroniser dès que le réseau revient, sans relance.
+    private suspend fun syncWithServer() {
+        // Rejoue les écritures restées en attente d'un lancement précédent.
+        outboxScheduler.requestFlush()
+        flow {
+            // Premier lancement sur un serveur vide : le suivi local part dans la file d'envoi. Une
+            // lecture du serveur qui échoue lève ici, elle n'est jamais prise pour un serveur vide.
+            if (syncer.enqueueLocalIfServerEmpty()) outboxScheduler.requestFlush()
+            emitAll(remoteDataSource.changes())
+        }
+            // Plusieurs signaux d'affilée (une rafale d'épisodes cochés) ne donnent qu'une lecture.
+            .conflate()
+            .onEach { mirrorUntilApplied() }
+            .retryWhen { cause, attempt ->
+                SyncLog.warn("Synchro interrompue, nouvelle tentative", cause)
+                delay(minOf(RETRY_DELAY_MILLIS * (attempt + 1), MAX_RETRY_DELAY_MILLIS))
+                true
             }
-            .catch { }
             .collect()
     }
 
-    // Upload automatique du suivi local existant, uniquement si Firestore n'a encore aucune
-    // donnée pour cet utilisateur (première connexion). Si Firestore a déjà du contenu (connexion
-    // déjà faite sur un autre appareil), on ne touche pas au local : le listener démarré juste
-    // après va de toute façon remplacer le contenu Room par celui de Firestore.
-    private suspend fun bootstrapIfNeeded(uid: String) {
-        runCatching {
-            val remoteMedia = firestoreDataSource.fetchMediaOnce(uid)
-            if (remoteMedia.isEmpty()) {
-                val localMedia = mediaDao.observeAll().first().map { it.toDomain() }
-                if (localMedia.isNotEmpty()) {
-                    firestoreDataSource.uploadAll(uid, localMedia)
-                }
-            }
-        }
-    }
-
-    // Miroir complet : upsert du contenu distant + suppression des lignes Room absentes du
-    // snapshot distant. Acceptable en performance vu la taille d'un suivi personnel. Les épisodes
-    // vus (`watched_episode`) d'un contenu supprimé partent avec lui (`onDelete = CASCADE`).
-    //
-    // `mediaDao.upsert` (UPDATE si la ligne existe déjà), jamais `insert` (INSERT OR REPLACE) ici :
-    // ce miroir tourne à chaque snapshot Firestore, y compris l'écho de nos propres écritures
-    // locales (voir `observeMedia`) — avec `insert`, chaque écho referait un DELETE+INSERT de
-    // *toutes* les lignes du snapshot et supprimerait en cascade les `watched_episode` de tous les
-    // contenus suivis, pas seulement celui qui vient de changer.
-    private suspend fun mirrorIntoRoom(uid: String, remoteMedia: List<RemoteMedia>) {
-        val remoteIds = remoteMedia.map { it.media.id }.toSet()
-        val localIds = mediaDao.getAllIds()
-        localIds.filter { it !in remoteIds }.forEach { mediaDao.deleteById(it) }
-        remoteMedia.forEach { mediaDao.upsert(it.media.toEntity()) }
-        mirrorEpisodes(uid, remoteMedia)
-    }
-
-    // Épisodes vus : Firestore fait foi dès que le document porte le champ, ce qui restaure le suivi
-    // après une réinstallation, même pour une série disparue de Jellyfin. Un document sans le champ
-    // (créé avant que les épisodes soient synchronisés) ne vide jamais Room : au contraire, ses
-    // épisodes locaux sont remontés une fois. Appelé après l'upsert des contenus, les épisodes
-    // dépendant d'eux par clé étrangère. Une ligne n'est réécrite que si elle diffère, pour ne pas
-    // relancer les observateurs à chaque écho de snapshot.
-    private suspend fun mirrorEpisodes(uid: String, remoteMedia: List<RemoteMedia>) {
-        val localById = episodeDao.getAllWatchedOnce()
-            .groupBy({ it.mediaId }, { EpisodeKey(it.seasonNumber, it.episodeNumber) })
-            .mapValues { it.value.toSet() }
-        remoteMedia.forEach { (media, remoteEpisodes) ->
-            val local = localById[media.id].orEmpty()
-            if (remoteEpisodes == null) {
-                if (local.isNotEmpty() && episodesBackfilled.add(media.id)) {
-                    runCatching { firestoreDataSource.addWatchedEpisodes(uid, media.id, local) }
-                }
-            } else if (remoteEpisodes != local) {
-                episodeDao.replaceAllForMedia(
-                    media.id,
-                    remoteEpisodes.map { WatchedEpisodeEntity(media.id, it.seasonNumber, it.episodeNumber) },
-                )
-            }
-        }
-    }
-
-    // Écriture Firestore en best-effort : une erreur ici ne fait jamais échouer l'opération
-    // locale — le SDK Firestore a une persistance offline native qui rejouera l'écriture toute
-    // seule au retour du réseau. Pas d'écriture Firestore si personne n'est connecté (ne devrait
-    // pas arriver, l'app gate tout accès aux écrans derrière la connexion, mais évite un appel
-    // Firestore anonyme dans un cas limite).
-    private suspend fun pushToFirestore(action: suspend (uid: String) -> Unit) {
-        val uid = authRepository.currentUser.value?.uid ?: return
-        runCatching { action(uid) }
+    // Une lecture rendue périmée par un envoi qui se terminait n'est pas appliquée : on la refait
+    // peu après plutôt que d'attendre le signal suivant, qui pourrait ne jamais venir.
+    private suspend fun mirrorUntilApplied() {
+        while (!syncer.mirror()) delay(STALE_RETRY_MILLIS)
     }
 
     private companion object {
-        const val MAX_SYNC_ATTEMPTS = 5
         const val RETRY_DELAY_MILLIS = 2_000L
+        const val MAX_RETRY_DELAY_MILLIS = 60_000L
+        const val STALE_RETRY_MILLIS = 500L
     }
 }
