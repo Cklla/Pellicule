@@ -19,6 +19,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -370,6 +371,24 @@ class MediaRepositoryImplTest {
         // contenu distant ne serait jamais arrivé jusqu'à Room.
         assertEquals(3, remote.changesCallCount)
         assertEquals(listOf("distant-1"), repository.observeMedia().first().map { it.id })
+    }
+
+    @Test
+    fun `le suivi distant est recopie meme si l'ecoute temps reel ne s'etablit jamais`() = runTest {
+        authRepository = FakeAuthRepository(user = null)
+        remote = FakeRemoteMediaDataSource().apply {
+            changesNeverSubscribe = true
+            media.value = listOf(dune.copy(id = "distant-1"))
+        }
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        buildRepository(scope)
+
+        authRepository.signInAs(AuthUser(uid = "user", displayName = "Spectateur"))
+        runCurrent()
+
+        // Réinstallation avec Realtime en panne : sans lecture initiale, rien ne revenait du serveur.
+        assertEquals(listOf("distant-1"), repository.observeMedia().first().map { it.id })
+        scope.cancel()
     }
 
     @Test

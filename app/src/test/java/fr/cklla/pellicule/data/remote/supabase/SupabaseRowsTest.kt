@@ -154,8 +154,12 @@ class SupabaseRowsTest {
 
     @Test
     fun `les refus de fond sont definitifs, le reste se reessaie`() {
-        listOf(400, 403, 409, 422).forEach { assertTrue("$it", isPermanentFailureStatus(it)) }
-        // 401 : session en cours de renouvellement ; 404 : table absente le temps d'une migration.
-        listOf(401, 404, 408, 429, 500, 502, 503).forEach { assertFalse("$it", isPermanentFailureStatus(it)) }
+        // CHECK, NOT NULL, clé étrangère, unicité, texte trop long, identifiant mal formé.
+        listOf("23514", "23502", "23503", "23505", "22001", "22P02").forEach { assertTrue(it, isPermanentFailure(it)) }
+        // Colonne ou table inconnue du schéma déployé, droits (RLS ou GRANT), JWT expiré, code absent.
+        listOf("PGRST204", "PGRST205", "42501", "42703", "PGRST301", "", "23").forEach {
+            assertFalse(it, isPermanentFailure(it))
+        }
+        assertFalse(isPermanentFailure(null))
     }
 }

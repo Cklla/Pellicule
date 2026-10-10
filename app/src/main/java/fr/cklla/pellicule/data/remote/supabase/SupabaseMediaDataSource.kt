@@ -6,7 +6,8 @@ import fr.cklla.pellicule.data.remote.RemoteSnapshot
 import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.exceptions.RestException
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.exception.PostgrestRestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.realtime.PostgresAction
@@ -16,12 +17,13 @@ import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import javax.inject.Inject
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 /**
  * Implémentation [RemoteMediaDataSource] sur Supabase (PostgREST pour les lectures et écritures,
@@ -45,9 +47,15 @@ class SupabaseMediaDataSource @Inject constructor(
         // Les événements survenus pendant une coupure ne sont pas rejoués : chaque (re)abonnement
         // déclenche donc une lecture complète.
         launch { channel.status.filter { it == RealtimeChannel.Status.SUBSCRIBED }.collect { send(Unit) } }
-        channel.subscribe(blockUntilSubscribed = true)
         try {
-            awaitCancellation()
+            // Sans délai, un abonnement qui n'aboutit jamais (réseau absent, accès refusé) bloquerait
+            // ici sans erreur, et la boucle de synchro ne réessaierait jamais.
+            withTimeout(SUBSCRIBE_TIMEOUT_MILLIS) { channel.subscribe(blockUntilSubscribed = true) }
+            // Le SDK abandonne un canal après plusieurs erreurs (jeton refusé…), ou le ferme à la
+            // demande du serveur, en le repassant simplement à UNSUBSCRIBED. Le flux se termine alors
+            // en erreur pour que l'appelant se réabonne, plutôt que de ne plus rien recevoir.
+            channel.status.first { it == RealtimeChannel.Status.UNSUBSCRIBED }
+            error("Écoute temps réel interrompue")
         } finally {
             withContext(NonCancellable) {
                 runCatching {
@@ -60,12 +68,14 @@ class SupabaseMediaDataSource @Inject constructor(
 
     override suspend fun fetchAll(): RemoteSnapshot {
         val media = fetchAllPages(PAGE_SIZE) { from, to ->
+            requireSession()
             client.from(TABLE_MEDIA).select {
                 order("id", Order.ASCENDING)
                 range(from, to)
             }.decodeList<MediaRow>()
         }
         val episodes = fetchAllPages(PAGE_SIZE) { from, to ->
+            requireSession()
             client.from(TABLE_EPISODE).select {
                 order("media_id", Order.ASCENDING)
                 order("season", Order.ASCENDING)
@@ -118,14 +128,23 @@ class SupabaseMediaDataSource @Inject constructor(
     // Les erreurs de réseau ou de serveur remontent telles quelles (à réessayer) ; seul un refus
     // définitif du serveur est converti.
     private suspend fun write(block: suspend () -> Unit) {
+        requireSession()
         try {
             block()
-        } catch (e: RestException) {
-            if (isPermanentFailureStatus(e.statusCode)) {
-                throw PermanentRemoteException("Écriture refusée (${e.statusCode}) : ${e.description ?: e.error}", e)
+        } catch (e: PostgrestRestException) {
+            if (isPermanentFailure(e.code)) {
+                throw PermanentRemoteException("Écriture refusée (${e.statusCode}, ${e.code}) : ${e.description ?: e.error}", e)
             }
             throw e
         }
+    }
+
+    // Sans session, le SDK envoie la requête avec la seule clé publique : le RLS ne laisse alors voir
+    // aucune ligne, sans erreur. Une lecture renverrait un suivi vide, que le miroir appliquerait en
+    // supprimant tout le suivi local ; une suppression « réussirait » sans rien supprimer et sortirait
+    // de la file. L'exception levée ici est une erreur ordinaire, réessayée plus tard.
+    private fun requireSession() {
+        checkNotNull(client.auth.currentSessionOrNull()) { "Aucune session : requête non envoyée" }
     }
 
     private companion object {
@@ -136,5 +155,6 @@ class SupabaseMediaDataSource @Inject constructor(
         const val PAGE_SIZE = 1000
         const val WRITE_CHUNK_SIZE = 500
         const val DELETE_CHUNK_SIZE = 200
+        const val SUBSCRIBE_TIMEOUT_MILLIS = 30_000L
     }
 }

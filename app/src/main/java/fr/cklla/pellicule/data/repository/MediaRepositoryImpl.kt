@@ -200,6 +200,9 @@ class MediaRepositoryImpl @Inject constructor(
             // Premier lancement sur un serveur vide : le suivi local part dans la file d'envoi. Une
             // lecture du serveur qui échoue lève ici, elle n'est jamais prise pour un serveur vide.
             if (syncer.enqueueLocalIfServerEmpty()) outboxScheduler.requestFlush()
+            // Une première lecture sans attendre l'écoute temps réel : si celle-ci ne s'établit pas,
+            // le suivi est tout de même recopié, puis relu à chaque nouvelle tentative.
+            emit(Unit)
             emitAll(remoteDataSource.changes())
         }
             // Plusieurs signaux d'affilée (une rafale d'épisodes cochés) ne donnent qu'une lecture.

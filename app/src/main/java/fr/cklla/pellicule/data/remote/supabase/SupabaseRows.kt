@@ -95,11 +95,17 @@ internal suspend fun <T> fetchAllPages(
 }
 
 /**
- * Statuts HTTP qui signalent une écriture rejetée sur le fond : requête invalide ou contrainte
- * violée (400), accès refusé par le RLS (403), conflit ou clé étrangère (409), entité non traitable
- * (422). Tout le reste (401 le temps que la session se renouvelle, 404, 408, 429, 5xx) se réessaie :
- * abandonner à tort une écriture est une perte de données, la réessayer à tort est seulement lent.
+ * Code d'erreur (SQLSTATE renvoyé par PostgREST) d'une écriture rejetée sur le fond : données
+ * invalides (classe 22) ou contrainte d'intégrité violée (classe 23 : CHECK, NOT NULL, clé
+ * étrangère). Rejouée, elle échouerait à l'identique.
+ *
+ * Le statut HTTP ne suffit pas : un 400 couvre aussi une colonne inconnue du serveur (`PGRST204`,
+ * application plus récente que le schéma déployé), un 403 un droit mal configuré, autant d'erreurs
+ * qui disparaissent une fois le serveur corrigé. Tout ce qui n'est pas classé ici se réessaie :
+ * abandonner à tort une écriture est une perte de données (le miroir efface ensuite la ligne
+ * locale que le serveur n'a jamais reçue), la réessayer à tort est seulement lent.
  */
-internal fun isPermanentFailureStatus(status: Int): Boolean = status in PERMANENT_STATUSES
+internal fun isPermanentFailure(code: String?): Boolean =
+    code != null && code.length == SQLSTATE_LENGTH && (code.startsWith("22") || code.startsWith("23"))
 
-private val PERMANENT_STATUSES = setOf(400, 403, 409, 422)
+private const val SQLSTATE_LENGTH = 5

@@ -3,6 +3,7 @@ package fr.cklla.pellicule.data.remote
 import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import java.io.IOException
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -37,6 +38,9 @@ class FakeRemoteMediaDataSource(private val enforceForeignKey: Boolean = true) :
     /** Nombre d'écoutes qui échouent avant de se comporter normalement. */
     var failedChangesAttempts = 0
 
+    /** Écoute qui ne s'établit jamais : ni signal, ni erreur. */
+    var changesNeverSubscribe = false
+
     /** Exécuté après la lecture de l'état mais avant de le renvoyer : simule un envoi pendant la lecture. */
     var onFetch: (suspend () -> Unit)? = null
 
@@ -56,6 +60,7 @@ class FakeRemoteMediaDataSource(private val enforceForeignKey: Boolean = true) :
     override fun changes(): Flow<Unit> = flow {
         changesCallCount++
         if (changesCallCount <= failedChangesAttempts) error("Échec d'écoute simulé")
+        if (changesNeverSubscribe) awaitCancellation()
         checkOnline()
         emit(Unit)
         emitAll(combine(media, episodes) { _, _ -> }.drop(1))
