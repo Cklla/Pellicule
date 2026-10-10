@@ -65,7 +65,8 @@ class AuthRepositoryImpl @Inject constructor(
             val message = if (e is GetCredentialCancellationException) {
                 "Connexion annulée."
             } else {
-                "Impossible de se connecter avec Google."
+                SignInFailure.log(e)
+                "Impossible de se connecter avec Google.\n(${SignInFailure.describe(e)})"
             }
             Resource.Error(message, e)
         },
