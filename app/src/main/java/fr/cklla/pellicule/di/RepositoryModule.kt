@@ -6,8 +6,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import fr.cklla.pellicule.data.local.JellyfinSessionStore
 import fr.cklla.pellicule.data.local.JellyfinSessionStoreImpl
-import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSource
-import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSourceImpl
+import fr.cklla.pellicule.data.remote.RemoteMediaDataSource
+import fr.cklla.pellicule.data.remote.supabase.SupabaseMediaDataSource
 import fr.cklla.pellicule.data.repository.AuthRepositoryImpl
 import fr.cklla.pellicule.data.repository.EpisodeReminderRepositoryImpl
 import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
@@ -18,6 +18,8 @@ import fr.cklla.pellicule.data.repository.SynopsisRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvDetailsRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvShowInfoRepositoryImpl
 import fr.cklla.pellicule.data.repository.WatchProvidersRepositoryImpl
+import fr.cklla.pellicule.data.sync.OutboxScheduler
+import fr.cklla.pellicule.data.sync.WorkManagerOutboxScheduler
 import fr.cklla.pellicule.domain.repository.AuthRepository
 import fr.cklla.pellicule.domain.repository.EpisodeReminderRepository
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
@@ -82,5 +84,9 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindFirestoreMediaDataSource(impl: FirestoreMediaDataSourceImpl): FirestoreMediaDataSource
+    abstract fun bindRemoteMediaDataSource(impl: SupabaseMediaDataSource): RemoteMediaDataSource
+
+    @Binds
+    @Singleton
+    abstract fun bindOutboxScheduler(impl: WorkManagerOutboxScheduler): OutboxScheduler
 }

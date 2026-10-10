@@ -533,7 +533,7 @@ class JellyfinRepositoryImplTest {
     @Test
     fun `syncTrackedSeries ne fait regresser aucun statut apres reinstallation quand Jellyfin n'expose plus que la saison suivante non vue`() = runTest {
         listOf(WatchStatus.EN_COURS, WatchStatus.VU).forEach { initialStatus ->
-            // Réinstallation : le contenu revient de Firestore avec son statut, mais sans
+            // Réinstallation : le contenu revient du serveur avec son statut, mais sans
             // `jellyfinId` ni épisode vu (`watched_episode` n'existe qu'en Room).
             val mediaRepository = fakeMediaRepository(FakeMediaDao())
             val mediaId = (mediaRepository.addMedia(

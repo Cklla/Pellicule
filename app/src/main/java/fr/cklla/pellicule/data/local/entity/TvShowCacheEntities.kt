@@ -5,8 +5,8 @@ import androidx.room.PrimaryKey
 
 /**
  * Métadonnées TMDB d'une série/anime, remplies par un seul `GET /tv/{id}`. Cache purement local à
- * l'appareil (jamais synchronisé vers Firestore) et indexé par `tmdbId` plutôt que par l'id d'un
- * contenu suivi : pas de clé étrangère vers `media`, donc le miroir Firestore → Room ne peut pas
+ * l'appareil (jamais synchronisé vers le serveur) et indexé par `tmdbId` plutôt que par l'id d'un
+ * contenu suivi : pas de clé étrangère vers `media`, donc le miroir serveur → Room ne peut pas
  * l'effacer en cascade.
  *
  * Les champs `last*`/`next*` décrivent le dernier épisode diffusé et le prochain annoncé ; ils

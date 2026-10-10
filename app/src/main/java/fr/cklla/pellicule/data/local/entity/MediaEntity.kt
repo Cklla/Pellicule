@@ -10,7 +10,7 @@ import androidx.room.PrimaryKey
  * base, mais lisible en cas d'inspection manuelle et robuste à un changement d'ordre des valeurs.
  *
  * [id] est un UUID (généré côté Repository, pas par Room) plutôt qu'un entier auto-incrémenté :
- * avec la synchro Firestore à venir, cet id doit être stable et unique sur tous les appareils.
+ * avec la synchro serveur, cet id doit être stable et unique sur tous les appareils.
  */
 @Entity(tableName = "media")
 data class MediaEntity(

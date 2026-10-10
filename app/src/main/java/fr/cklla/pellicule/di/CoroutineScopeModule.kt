@@ -12,7 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 
 /**
  * Qualifie le [CoroutineScope] vivant aussi longtemps que l'application, utilisé par
- * [fr.cklla.pellicule.data.repository.MediaRepositoryImpl] pour piloter la synchro Firestore en
+ * [fr.cklla.pellicule.data.repository.MediaRepositoryImpl] pour piloter la synchro avec le serveur en
  * arrière-plan (pas de `viewModelScope` disponible pour un singleton Hilt). Injecté plutôt que
  * construit en dur dans la classe pour pouvoir le remplacer par un scope de test déterministe
  * (`UnconfinedTestDispatcher`) dans les tests unitaires.

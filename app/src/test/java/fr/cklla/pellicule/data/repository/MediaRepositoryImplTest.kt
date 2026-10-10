@@ -1,7 +1,8 @@
 package fr.cklla.pellicule.data.repository
 
 import fr.cklla.pellicule.data.local.entity.WatchedEpisodeEntity
-import fr.cklla.pellicule.data.remote.firestore.FakeFirestoreMediaDataSource
+import fr.cklla.pellicule.data.remote.FakeRemoteMediaDataSource
+import fr.cklla.pellicule.data.sync.PendingOperationKind
 import fr.cklla.pellicule.domain.model.AuthUser
 import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
@@ -14,9 +15,11 @@ import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -26,7 +29,7 @@ import org.junit.Test
 
 /**
  * `UnconfinedTestDispatcher` pour le scope interne du repository : les coroutines qu'il lance
- * (écoute de `currentUser`, mirroring Firestore -> Room) s'exécutent alors de façon synchrone et
+ * (écoute de `currentUser`, miroir serveur -> Room, envoi de la file) s'exécutent alors de façon synchrone et
  * déterministe dès qu'un `MutableStateFlow` fake change de valeur, sans avoir besoin d'avancer un
  * temps virtuel séparé — le test reste single-thread de bout en bout.
  */
@@ -35,8 +38,11 @@ class MediaRepositoryImplTest {
 
     private lateinit var dao: FakeMediaDao
     private lateinit var episodeDao: FakeEpisodeDao
-    private lateinit var firestoreDataSource: FakeFirestoreMediaDataSource
+    private lateinit var outboxDao: FakeOutboxDao
+    private lateinit var remote: FakeRemoteMediaDataSource
     private lateinit var authRepository: FakeAuthRepository
+    private lateinit var syncer: fr.cklla.pellicule.data.sync.MediaSyncer
+    private lateinit var scheduler: TestOutboxScheduler
     private lateinit var repository: MediaRepository
 
     // 2026-10-04 à midi UTC ; l'horloge ne sert qu'à `setWatchedYear`.
@@ -56,10 +62,15 @@ class MediaRepositoryImplTest {
     )
 
     private fun buildRepository(scope: CoroutineScope = CoroutineScope(UnconfinedTestDispatcher())) {
+        syncer = fakeSyncer(remote, outboxDao, dao, episodeDao, authRepository)
+        scheduler = TestOutboxScheduler({ syncer.flush() })
         repository = MediaRepositoryImpl(
             mediaDao = dao,
-            episodeDao = episodeDao,
-            firestoreDataSource = firestoreDataSource,
+            outboxDao = outboxDao,
+            transactions = ImmediateTransactionRunner,
+            remoteDataSource = remote,
+            syncer = syncer,
+            outboxScheduler = scheduler,
             authRepository = authRepository,
             timeSource = timeSource,
             repositoryScope = scope,
@@ -70,7 +81,8 @@ class MediaRepositoryImplTest {
     fun setUp() {
         dao = FakeMediaDao()
         episodeDao = FakeEpisodeDao()
-        firestoreDataSource = FakeFirestoreMediaDataSource()
+        outboxDao = FakeOutboxDao()
+        remote = FakeRemoteMediaDataSource()
         authRepository = FakeAuthRepository()
         buildRepository()
     }
@@ -176,7 +188,7 @@ class MediaRepositoryImplTest {
 
         assertTrue(result is Resource.Success)
         assertNull(watchedAtOf("en-cours"))
-        assertTrue(firestoreDataSource.upsertedMedia.isEmpty())
+        assertTrue(remote.upsertedMedia.isEmpty())
     }
 
     @Test
@@ -185,7 +197,7 @@ class MediaRepositoryImplTest {
 
         assertTrue(result is Resource.Success)
         assertTrue(repository.observeMedia().first().isEmpty())
-        assertTrue(firestoreDataSource.upsertedMedia.isEmpty())
+        assertTrue(remote.upsertedMedia.isEmpty())
     }
 
     @Test
@@ -197,7 +209,7 @@ class MediaRepositoryImplTest {
         repository.setWatchedYear(id, 2019)
 
         assertEquals(original, watchedAtOf(id))
-        assertTrue(firestoreDataSource.upsertedMedia.isEmpty())
+        assertTrue(remote.upsertedMedia.isEmpty())
     }
 
     @Test
@@ -207,7 +219,7 @@ class MediaRepositoryImplTest {
         repository.setWatchedYear(id, 2024)
 
         assertEquals(millis(2024, 3, 9), watchedAtOf(id))
-        assertTrue(firestoreDataSource.upsertedMedia.isEmpty())
+        assertTrue(remote.upsertedMedia.isEmpty())
     }
 
     @Test
@@ -238,20 +250,20 @@ class MediaRepositoryImplTest {
     }
 
     @Test
-    fun `setWatchedYear repercute la nouvelle date vers Firestore`() = runTest {
+    fun `setWatchedYear repercute la nouvelle date vers le serveur`() = runTest {
         val id = addVu(watchedAt = millis(2026, 3, 1))
 
         repository.setWatchedYear(id, 2024)
 
-        val pushed = firestoreDataSource.upsertedMedia.single()
+        val pushed = remote.upsertedMedia.single()
         assertEquals(id, pushed.id)
         assertEquals(millis(2024, 7, 1), pushed.watchedAt)
     }
 
     @Test
-    fun `un echec Firestore n'empeche pas setWatchedYear d'ecrire en local`() = runTest {
+    fun `un serveur injoignable n'empeche pas setWatchedYear d'ecrire en local`() = runTest {
         val id = addVu(watchedAt = millis(2026, 3, 1))
-        firestoreDataSource.shouldThrowOnWrite = true
+        remote.offline = true
 
         val result = repository.setWatchedYear(id, 2024)
 
@@ -286,15 +298,15 @@ class MediaRepositoryImplTest {
     }
 
     @Test
-    fun `addMedia repercute le contenu vers Firestore`() = runTest {
+    fun `addMedia repercute le contenu vers le serveur`() = runTest {
         val addedId = (repository.addMedia(dune) as Resource.Success).data
 
-        assertEquals(listOf(addedId), firestoreDataSource.upsertedMedia.map { it.id })
+        assertEquals(listOf(addedId), remote.upsertedMedia.map { it.id })
     }
 
     @Test
-    fun `un echec Firestore n'empeche pas l'ecriture locale`() = runTest {
-        firestoreDataSource.shouldThrowOnWrite = true
+    fun `un serveur injoignable n'empeche pas l'ecriture locale`() = runTest {
+        remote.offline = true
 
         val result = repository.addMedia(dune)
 
@@ -319,7 +331,7 @@ class MediaRepositoryImplTest {
         authRepository.dropSessionWithoutSignOut()
 
         assertEquals(1, repository.observeMedia().first().size)
-        assertEquals(0, firestoreDataSource.clearLocalCacheCallCount)
+        assertEquals(1, outboxDao.pending.size.coerceAtLeast(1))
     }
 
     @Test
@@ -330,92 +342,164 @@ class MediaRepositoryImplTest {
         buildRepository()
 
         assertEquals(1, repository.observeMedia().first().size)
-        assertEquals(0, firestoreDataSource.clearLocalCacheCallCount)
     }
 
     @Test
-    fun `deconnexion purge aussi le cache disque de Firestore`() = runTest {
+    fun `deconnexion vide aussi la file d'envoi`() = runTest {
+        remote.offline = true
         repository.addMedia(dune)
+        assertEquals(1, outboxDao.pending.size)
 
         authRepository.signOut()
 
-        assertEquals(1, firestoreDataSource.clearLocalCacheCallCount)
+        assertTrue(outboxDao.pending.isEmpty())
     }
 
     @Test
-    fun `la synchro reprend apres une erreur Firestore`() = runTest {
+    fun `la synchro reprend apres une erreur d'ecoute`() = runTest {
         // Même horloge virtuelle que le test, sinon les délais entre deux tentatives
         // n'avanceraient jamais.
         authRepository = FakeAuthRepository(user = null)
-        firestoreDataSource = FakeFirestoreMediaDataSource().apply { failedObserveAttempts = 2 }
+        remote = FakeRemoteMediaDataSource().apply { failedChangesAttempts = 2 }
         buildRepository(CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
-        firestoreDataSource.remoteMedia.value = listOf(dune.copy(id = "distant-1"))
+        remote.media.value = listOf(dune.copy(id = "distant-1"))
 
         authRepository.signInAs(AuthUser(uid = "user", displayName = "Spectateur"))
         advanceUntilIdle()
 
         // Sans retry, les deux premières erreurs auraient coupé la synchro définitivement et le
         // contenu distant ne serait jamais arrivé jusqu'à Room.
-        assertEquals(3, firestoreDataSource.observeCallCount)
+        assertEquals(3, remote.changesCallCount)
         assertEquals(listOf("distant-1"), repository.observeMedia().first().map { it.id })
     }
 
     @Test
-    fun `mirrorIntoRoom reflete un ajout distant`() = runTest {
-        val distant = dune.copy(id = "distant-1")
+    fun `le suivi distant est recopie meme si l'ecoute temps reel ne s'etablit jamais`() = runTest {
+        authRepository = FakeAuthRepository(user = null)
+        remote = FakeRemoteMediaDataSource().apply {
+            changesNeverSubscribe = true
+            media.value = listOf(dune.copy(id = "distant-1"))
+        }
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        buildRepository(scope)
 
-        firestoreDataSource.remoteMedia.value = listOf(distant)
+        authRepository.signInAs(AuthUser(uid = "user", displayName = "Spectateur"))
+        runCurrent()
 
-        val media = repository.observeMedia().first()
-        assertEquals(listOf("distant-1"), media.map { it.id })
+        // Réinstallation avec Realtime en panne : sans lecture initiale, rien ne revenait du serveur.
+        assertEquals(listOf("distant-1"), repository.observeMedia().first().map { it.id })
+        scope.cancel()
     }
 
     @Test
-    fun `mirrorIntoRoom supprime localement un contenu retire de Firestore`() = runTest {
-        val distant = dune.copy(id = "distant-1")
-        firestoreDataSource.remoteMedia.value = listOf(distant)
+    fun `lance hors ligne, la synchro demarre quand le reseau revient sans relancer l'app`() = runTest {
+        authRepository = FakeAuthRepository(user = null)
+        remote = FakeRemoteMediaDataSource().apply {
+            offline = true
+            media.value = listOf(dune.copy(id = "distant-1"))
+        }
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        buildRepository(scope)
+        authRepository.signInAs(AuthUser(uid = "user", displayName = "Spectateur"))
+        // Bien plus d'échecs que l'ancienne limite de tentatives.
+        testScheduler.advanceTimeBy(10 * 60_000L)
+        assertTrue(repository.observeMedia().first().isEmpty())
+
+        remote.offline = false
+        advanceUntilIdle()
+
+        assertEquals(listOf("distant-1"), repository.observeMedia().first().map { it.id })
+        scope.cancel()
+    }
+
+    @Test
+    fun `mirrorIntoRoom reflete un ajout distant`() = runTest {
+        remote.media.value = listOf(dune.copy(id = "distant-1"))
+
+        assertEquals(listOf("distant-1"), repository.observeMedia().first().map { it.id })
+    }
+
+    @Test
+    fun `mirrorIntoRoom supprime localement un contenu retire du serveur`() = runTest {
+        remote.media.value = listOf(dune.copy(id = "distant-1"))
         assertEquals(1, repository.observeMedia().first().size)
 
-        firestoreDataSource.remoteMedia.value = emptyList()
+        remote.media.value = emptyList()
 
         assertTrue(repository.observeMedia().first().isEmpty())
     }
 
     @Test
-    fun `bootstrap uploade le suivi local si Firestore est vide a la connexion`() = runTest {
+    fun `un serveur vide au premier lancement recoit le suivi local, episodes compris`() = runTest {
         // Suivi local présent avant toute connexion (déconnecté au départ).
         authRepository = FakeAuthRepository(user = null)
-        firestoreDataSource = FakeFirestoreMediaDataSource()
         buildRepository()
-        dao.insert(dune.copy(id = "local-1").toEntity())
+        val serie = dune.copy(id = "local-1", type = MediaType.SERIE)
+        dao.insert(serie.toEntity())
+        episodeDao.insertAll(listOf(WatchedEpisodeEntity("local-1", 1, 1), WatchedEpisodeEntity("local-1", 1, 2)))
 
         authRepository.signInAs(AuthUser(uid = "new-user", displayName = "Spectateur"))
 
-        assertEquals(1, firestoreDataSource.uploadAllCallCount)
-        assertEquals(listOf("local-1"), firestoreDataSource.remoteMedia.value.map { it.id })
+        assertEquals(listOf("local-1"), remote.media.value.map { it.id })
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)), remote.episodes.value["local-1"])
+        // Le suivi local n'a jamais été vidé en route.
+        assertEquals(listOf("local-1"), dao.getAllIds())
+        assertEquals(2, episodeDao.getWatchedOnce("local-1").size)
+        assertTrue(outboxDao.pending.isEmpty())
     }
 
     @Test
-    fun `bootstrap n'ecrase pas Firestore si du contenu y est deja present`() = runTest {
-        val distant = dune.copy(id = "distant-1")
+    fun `le suivi local est protege du miroir tant que le serveur vide n'a rien recu`() = runTest {
         authRepository = FakeAuthRepository(user = null)
-        firestoreDataSource = FakeFirestoreMediaDataSource().apply { remoteMedia.value = listOf(distant) }
+        remote.offline = false
+        buildRepository()
+        dao.insert(dune.copy(id = "local-1").toEntity())
+        scheduler.autoFlush = false
+
+        authRepository.signInAs(AuthUser(uid = "new-user", displayName = "Spectateur"))
+        // Un état serveur vide (rien n'est encore parti) ne doit rien supprimer.
+        assertTrue(syncer.mirror())
+
+        assertEquals(listOf("local-1"), dao.getAllIds())
+        assertEquals(1, outboxDao.pending.size)
+    }
+
+    @Test
+    fun `une lecture du serveur qui echoue au premier lancement n'est pas prise pour un serveur vide`() = runTest {
+        authRepository = FakeAuthRepository(user = null)
+        remote = FakeRemoteMediaDataSource().apply { offline = true }
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        buildRepository(scope)
+        dao.insert(dune.copy(id = "local-1").toEntity())
+
+        authRepository.signInAs(AuthUser(uid = "new-user", displayName = "Spectateur"))
+        testScheduler.advanceTimeBy(10_000L)
+
+        // Aucune mise en file sur une lecture ratée, et rien d'effacé localement.
+        assertTrue(outboxDao.pending.isEmpty())
+        assertEquals(listOf("local-1"), dao.getAllIds())
+        // La synchro réessaie sans fin tant que le réseau manque : on l'arrête pour finir le test.
+        scope.cancel()
+    }
+
+    @Test
+    fun `un serveur deja peuple n'est pas ecrase par le suivi local, le miroir fait ensuite autorite`() = runTest {
+        authRepository = FakeAuthRepository(user = null)
+        remote = FakeRemoteMediaDataSource().apply { media.value = listOf(dune.copy(id = "distant-1")) }
         buildRepository()
         dao.insert(dune.copy(id = "local-1").toEntity())
 
         authRepository.signInAs(AuthUser(uid = "existing-user", displayName = "Spectateur"))
 
-        assertEquals(0, firestoreDataSource.uploadAllCallCount)
-        // Le miroir Firestore -> Room fait ensuite autorité : le contenu distant remplace le local.
-        val media = repository.observeMedia().first()
-        assertEquals(listOf("distant-1"), media.map { it.id })
+        assertTrue(remote.upsertedMedia.isEmpty())
+        assertEquals(listOf("distant-1"), repository.observeMedia().first().map { it.id })
     }
 
     @Test
-    fun `les episodes vus reviennent de Firestore apres une reinstallation`() = runTest {
+    fun `les episodes vus reviennent du serveur apres une reinstallation`() = runTest {
         val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
-        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
-        firestoreDataSource.remoteMedia.value = listOf(serie)
+        remote.episodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+        remote.media.value = listOf(serie)
 
         val restored = episodeDao.getWatchedOnce("fallout").map { EpisodeKey(it.seasonNumber, it.episodeNumber) }.toSet()
         assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)), restored)
@@ -424,66 +508,134 @@ class MediaRepositoryImplTest {
     @Test
     fun `un episode decoche sur un autre appareil est decoche ici aussi`() = runTest {
         val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
-        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
-        firestoreDataSource.remoteMedia.value = listOf(serie)
+        remote.episodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+        remote.media.value = listOf(serie)
 
-        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1)))
+        remote.episodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1)))
 
         assertEquals(1, episodeDao.getWatchedOnce("fallout").size)
     }
 
     @Test
-    fun `une liste d'episodes vide cote Firestore vide les episodes locaux`() = runTest {
+    fun `un contenu sans episode vu cote serveur vide les episodes locaux`() = runTest {
         val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
         dao.insert(serie.toEntity())
         episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1)))
 
-        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to emptySet())
-        firestoreDataSource.remoteMedia.value = listOf(serie)
+        remote.media.value = listOf(serie)
 
         assertTrue(episodeDao.getWatchedOnce("fallout").isEmpty())
     }
 
     @Test
-    fun `un document sans champ d'episodes ne vide pas Room et remonte les episodes locaux`() = runTest {
+    fun `les episodes d'un contenu disparu du serveur partent avec lui`() = runTest {
         val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
-        dao.insert(serie.toEntity())
-        episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1), WatchedEpisodeEntity("fallout", 1, 2)))
+        remote.episodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1)))
+        remote.media.value = listOf(serie)
 
-        firestoreDataSource.remoteMedia.value = listOf(serie)
-
-        assertEquals(2, episodeDao.getWatchedOnce("fallout").size)
-        assertEquals(
-            listOf("fallout" to setOf(EpisodeKey(1, 1), EpisodeKey(1, 2))),
-            firestoreDataSource.addedEpisodes,
-        )
-    }
-
-    @Test
-    fun `la remontee des episodes locaux n'est tentee qu'une fois par session`() = runTest {
-        val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
-        dao.insert(serie.toEntity())
-        episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1)))
-        // Règles pas encore publiées : l'écriture est refusée, le document reste sans champ.
-        firestoreDataSource.shouldThrowOnWrite = true
-
-        firestoreDataSource.remoteMedia.value = listOf(serie)
-        firestoreDataSource.remoteMedia.value = listOf(serie.copy(title = "Fallout"))
-        firestoreDataSource.remoteMedia.value = listOf(serie.copy(title = "Fallout (2024)"))
-
-        firestoreDataSource.shouldThrowOnWrite = false
-        assertTrue(firestoreDataSource.addedEpisodes.isEmpty())
-        assertEquals(1, episodeDao.getWatchedOnce("fallout").size)
-    }
-
-    @Test
-    fun `les episodes d'un contenu disparu de Firestore partent avec lui`() = runTest {
-        val serie = dune.copy(id = "fallout", type = MediaType.SERIE)
-        firestoreDataSource.remoteEpisodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1)))
-        firestoreDataSource.remoteMedia.value = listOf(serie)
-
-        firestoreDataSource.remoteMedia.value = emptyList()
+        remote.media.value = emptyList()
 
         assertTrue(dao.getAllIds().isEmpty())
+    }
+
+    // --- File d'envoi : écriture hors ligne puis miroir ---
+
+    @Test
+    fun `un contenu ajoute hors ligne reste en local apres un miroir du serveur vide`() = runTest {
+        remote.offline = true
+        val id = (repository.addMedia(dune) as Resource.Success).data
+        remote.offline = false
+
+        assertTrue(syncer.mirror())
+
+        assertEquals(listOf(id), dao.getAllIds())
+        assertEquals(1, outboxDao.pending.size)
+    }
+
+    @Test
+    fun `un contenu ajoute hors ligne part vers le serveur au retour du reseau`() = runTest {
+        remote.offline = true
+        val id = (repository.addMedia(dune) as Resource.Success).data
+        assertTrue(remote.media.value.isEmpty())
+
+        remote.offline = false
+        syncer.flush()
+
+        assertEquals(listOf(id), remote.media.value.map { it.id })
+        assertTrue(outboxDao.pending.isEmpty())
+    }
+
+    @Test
+    fun `une modification hors ligne n'est pas ecrasee par le miroir`() = runTest {
+        val id = (repository.addMedia(dune) as Resource.Success).data
+        remote.offline = true
+        repository.updateMedia(dune.copy(id = id, status = WatchStatus.VU))
+        remote.offline = false
+
+        assertTrue(syncer.mirror())
+
+        assertEquals(WatchStatus.VU, repository.observeMediaById(id).first()?.status)
+        syncer.flush()
+        assertEquals(WatchStatus.VU, remote.media.value.single().status)
+    }
+
+    @Test
+    fun `une suppression en attente n'est pas recreee par le miroir`() = runTest {
+        val id = (repository.addMedia(dune) as Resource.Success).data
+        remote.offline = true
+        repository.deleteMedia(id)
+        remote.offline = false
+
+        assertTrue(syncer.mirror())
+
+        assertTrue(dao.getAllIds().isEmpty())
+        syncer.flush()
+        assertTrue(remote.media.value.isEmpty())
+        assertEquals(listOf(id), remote.deletedMediaIds)
+    }
+
+    @Test
+    fun `supprimer un contenu retire ses operations en attente et n'enfile que la suppression`() = runTest {
+        remote.offline = true
+        val id = (repository.addMedia(dune) as Resource.Success).data
+        repository.deleteMedia(id)
+
+        assertEquals(listOf(PendingOperationKind.DELETE_MEDIA.name), outboxDao.pending.map { it.kind })
+    }
+
+    @Test
+    fun `chaque ecriture locale enregistre Room et la file ensemble`() = runTest {
+        remote.offline = true
+        val id = (repository.addMedia(dune) as Resource.Success).data
+        repository.updateMedia(dune.copy(id = id, status = WatchStatus.EN_COURS))
+        repository.deleteMedia(id)
+
+        // Rien n'est envoyé directement : tout est passé par la file.
+        assertTrue(remote.upsertedMedia.isEmpty())
+        assertTrue(remote.deletedMediaIds.isEmpty())
+        assertTrue(scheduler.requestCount >= 3)
+    }
+
+    @Test
+    fun `un etat serveur lu avant un envoi reussi est ignore`() = runTest {
+        val id = (repository.addMedia(dune) as Resource.Success).data
+        // Le contenu est en file hors ligne ; pendant la lecture (serveur vide), l'envoi réussit et
+        // sort de la file. Appliquer l'état lu avant l'envoi supprimerait le contenu qui vient d'arriver.
+        remote.offline = true
+        repository.updateMedia(dune.copy(id = id, status = WatchStatus.VU))
+        remote.offline = false
+        var firstFetch = true
+        remote.onFetch = {
+            if (firstFetch) {
+                firstFetch = false
+                syncer.flush()
+            }
+        }
+
+        assertTrue(syncer.mirror())
+
+        assertEquals(listOf(id), dao.getAllIds())
+        assertEquals(1, remote.media.value.size)
+        assertTrue(remote.fetchCount >= 2)
     }
 }
