@@ -42,3 +42,6 @@ WORK_MIGRATION.md
 
 # Other
 Icones/
+
+# Exports de données personnelles (migration)
+import-*.sql

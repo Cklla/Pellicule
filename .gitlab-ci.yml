@@ -54,6 +54,17 @@ dependency_inventory:
   before_script:
     - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
 
+# Tests du script d'export Firestore -> Supabase (module pur, sans reseau ni Firebase).
+test_scripts_migration:
+  stage: test
+  image: python:3.12-slim
+  tags:
+    - linux-docker
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+  script:
+    - cd scripts/migration && python3 -m unittest -q
+
 # -----------------------------------------------------------------------------
 # Sauvegarde des donnees Supabase (l'offre gratuite n'en fait pas).
 #
