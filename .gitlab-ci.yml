@@ -8,6 +8,10 @@
 #
 # Prerequis cote GitLab (Settings > CI/CD > Variables) :
 #   GOOGLE_SERVICES_JSON  fichier, le google-services.json du projet Firebase
+#   SUPABASE_DB_URL       variable masquee, chaine de connexion Postgres du projet
+#                         Supabase (Connect > Session pooler), mot de passe inclus
+# Et un planning (Build > Pipeline schedules) quotidien ou hebdomadaire pour
+# declencher la sauvegarde.
 # La variable NVD_API_KEY n'est plus utilisee : le scan de vulnerabilites ne
 # s'appuie plus sur la base NVD.
 # =============================================================================
@@ -25,6 +29,7 @@ include:
 
 stages:
   - test
+  - sauvegarde
 
 # -----------------------------------------------------------------------------
 # Surcharges propres au projet.
@@ -48,3 +53,27 @@ unit_tests:
 dependency_inventory:
   before_script:
     - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
+
+# -----------------------------------------------------------------------------
+# Sauvegarde des donnees Supabase (l'offre gratuite n'en fait pas).
+#
+# Uniquement sur planning. Export des donnees du schema public en SQL, conserve
+# en artefact 30 jours : il contient les donnees de suivi des comptes, il ne doit
+# donc pas sortir du projet GitLab. La connexion quotidienne sert aussi
+# a eviter la mise en pause d'un projet gratuit inactif.
+# -----------------------------------------------------------------------------
+sauvegarde_supabase:
+  stage: sauvegarde
+  image: postgres:17
+  tags:
+    - linux-docker
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - pg_dump "$SUPABASE_DB_URL" --data-only --schema=public --no-owner --file=sauvegarde.sql
+    - test -s sauvegarde.sql
+  artifacts:
+    name: "supabase-$CI_PIPELINE_ID"
+    paths:
+      - sauvegarde.sql
+    expire_in: 30 days
