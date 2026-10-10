@@ -36,7 +36,7 @@ import fr.cklla.pellicule.ui.theme.TextSecondary
 
 /**
  * Écran de connexion : passage obligé au lancement de l'app tant que personne n'est connecté (voir
- * `PelliculeApp`, qui gate tout le `NavHost` derrière `AuthRepository.currentUser`). Mise en page
+ * `PelliculeApp`, qui gate tout le `NavHost` derrière `AuthRepository.authState`). Mise en page
  * dérivée par cohérence avec le reste de l'app (mêmes styles de texte, même palette).
  */
 @Composable

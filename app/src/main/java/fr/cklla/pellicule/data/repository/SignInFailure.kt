@@ -2,15 +2,15 @@ package fr.cklla.pellicule.data.repository
 
 import android.util.Log
 import androidx.credentials.exceptions.GetCredentialException
-import com.google.firebase.auth.FirebaseAuthException
+import io.github.jan.supabase.exceptions.RestException
 
 /**
  * Diagnostic d'un échec de connexion Google : sans lui, tout échec se réduit au même message
- * générique, impossible à départager entre un refus App Check, un Play Services défaillant ou une
+ * générique, impossible à départager entre un refus de Supabase, un Play Services défaillant ou une
  * configuration OAuth incomplète.
  *
  * En release, R8 renomme les classes d'exception : le nom de classe seul ne dirait rien. On s'appuie
- * donc sur les identifiants stables (type Credential Manager, code d'erreur Firebase) puis sur le
+ * donc sur les identifiants stables (type Credential Manager, erreur et code HTTP de Supabase) puis sur le
  * message. Ni jeton ni identifiant de compte n'y figurent.
  */
 internal object SignInFailure {
@@ -33,7 +33,7 @@ internal object SignInFailure {
     fun describe(error: Throwable): String {
         val code = when (error) {
             is GetCredentialException -> error.type.substringAfterLast('.')
-            is FirebaseAuthException -> error.errorCode
+            is RestException -> "${error.error}/${error.response.status.value}"
             else -> error::class.java.simpleName
         }
         val detail = error.message?.takeIf { it.isNotBlank() }?.take(MAX_MESSAGE_LENGTH)

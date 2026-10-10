@@ -50,6 +50,25 @@ android {
             "TMDB_API_KEY",
             "\"${localProperties.getProperty("TMDB_API_KEY", "")}\"",
         )
+        // Configuration Supabase, injectée comme la clé TMDB : jamais dans le code source. La clé
+        // publishable est publique par conception (la sécurité repose sur le RLS), mais reste
+        // propre à ce projet Supabase ; l'identifiant client Web est celui déclaré côté Supabase
+        // pour la connexion par jeton Google.
+        buildConfigField(
+            "String",
+            "SUPABASE_URL",
+            "\"${localProperties.getProperty("SUPABASE_URL", "")}\"",
+        )
+        buildConfigField(
+            "String",
+            "SUPABASE_PUBLISHABLE_KEY",
+            "\"${localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY", "")}\"",
+        )
+        buildConfigField(
+            "String",
+            "GOOGLE_WEB_CLIENT_ID",
+            "\"${localProperties.getProperty("GOOGLE_WEB_CLIENT_ID", "")}\"",
+        )
     }
 
     signingConfigs {
@@ -149,6 +168,12 @@ dependencies {
     // réel d'un compte personnel, contrairement à la clé API TMDB (secret de build, non sensible
     // côté utilisateur).
     implementation(libs.androidx.security.crypto)
+
+    // Supabase : authentification (connexion par jeton Google). Le moteur HTTP OkHttp est celui
+    // qu'utilise déjà le reste de l'app ; sans lui, Ktor n'aurait aucun moteur sur Android.
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)
+    implementation(libs.ktor.client.okhttp)
 
     // Firebase : Firestore (source de vérité distante du suivi) + Auth (identifie l'utilisateur,
     // nécessaire aux règles de sécurité Firestore). Le BoM aligne les versions des différents
