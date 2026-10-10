@@ -1,6 +1,7 @@
 package fr.cklla.pellicule.data.repository
 
 import android.content.Context
+import fr.cklla.pellicule.domain.model.AuthState
 import fr.cklla.pellicule.domain.model.AuthUser
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.repository.AuthRepository
@@ -19,6 +20,9 @@ class FakeAuthRepository(
     private val _currentUser = MutableStateFlow(user)
     override val currentUser: StateFlow<AuthUser?> = _currentUser
 
+    private val _authState = MutableStateFlow<AuthState>(user?.let { AuthState.SignedIn(it) } ?: AuthState.SignedOut)
+    override val authState: StateFlow<AuthState> = _authState
+
     private val _signedOut = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     override val signedOut: SharedFlow<Unit> = _signedOut
 
@@ -27,24 +31,34 @@ class FakeAuthRepository(
 
     override suspend fun signIn(context: Context): Resource<AuthUser> {
         if (signInResult is Resource.Success) {
-            _currentUser.value = (signInResult as Resource.Success).data
+            signInAs((signInResult as Resource.Success).data)
         }
         return signInResult
     }
 
     override suspend fun signOut() {
         signOutCallCount++
-        _currentUser.value = null
+        setSignedOutState()
         _signedOut.emit(Unit)
     }
 
     /** Simule une session absente (chargement au lancement, jeton expiré) : aucune déconnexion demandée. */
-    fun dropSessionWithoutSignOut() {
+    fun dropSessionWithoutSignOut() = setSignedOutState()
+
+    /** Simule le chargement de la session au lancement : ni connecté ni déconnecté. */
+    fun startInitializing() {
         _currentUser.value = null
+        _authState.value = AuthState.Initializing
+    }
+
+    private fun setSignedOutState() {
+        _currentUser.value = null
+        _authState.value = AuthState.SignedOut
     }
 
     /** Simule une connexion déjà effective, sans passer par le flow [signIn] (Credential Manager). */
     fun signInAs(user: AuthUser) {
         _currentUser.value = user
+        _authState.value = AuthState.SignedIn(user)
     }
 }
