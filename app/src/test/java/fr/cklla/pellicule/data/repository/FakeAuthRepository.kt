@@ -4,7 +4,9 @@ import android.content.Context
 import fr.cklla.pellicule.domain.model.AuthUser
 import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.repository.AuthRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /** Double de test en mémoire : pas de vrai Credential Manager/Firebase à solliciter ici. */
@@ -16,6 +18,9 @@ class FakeAuthRepository(
 
     private val _currentUser = MutableStateFlow(user)
     override val currentUser: StateFlow<AuthUser?> = _currentUser
+
+    private val _signedOut = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    override val signedOut: SharedFlow<Unit> = _signedOut
 
     var signOutCallCount = 0
         private set
@@ -29,6 +34,12 @@ class FakeAuthRepository(
 
     override suspend fun signOut() {
         signOutCallCount++
+        _currentUser.value = null
+        _signedOut.emit(Unit)
+    }
+
+    /** Simule une session absente (chargement au lancement, jeton expiré) : aucune déconnexion demandée. */
+    fun dropSessionWithoutSignOut() {
         _currentUser.value = null
     }
 

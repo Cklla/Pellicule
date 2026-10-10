@@ -67,6 +67,28 @@ class TvShowInfoRepositoryImplTest {
     }
 
     @Test
+    fun `la deconnexion vide le cache des series`() = runTest {
+        val auth = FakeAuthRepository()
+        val repository = repository(auth)
+        repository.refreshIfStale(tmdbId = 42)
+
+        auth.signOut()
+
+        assertNull(repository.getCachedShow(42))
+    }
+
+    @Test
+    fun `une session absente sans deconnexion conserve le cache des series`() = runTest {
+        val auth = FakeAuthRepository()
+        val repository = repository(auth)
+        repository.refreshIfStale(tmdbId = 42)
+
+        auth.dropSessionWithoutSignOut()
+
+        assertNotNull(repository.getCachedShow(42))
+    }
+
+    @Test
     fun `un cache valide n'appelle plus TMDB`() = runTest {
         val repository = repository()
         repository.refreshIfStale(42)

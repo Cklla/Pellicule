@@ -18,7 +18,9 @@ import fr.cklla.pellicule.domain.model.Resource
 import fr.cklla.pellicule.domain.repository.AuthRepository
 import java.security.SecureRandom
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.tasks.await
 
 private fun FirebaseUser.toAuthUser() = AuthUser(uid = uid, displayName = displayName)
@@ -33,6 +35,9 @@ class AuthRepositoryImpl @Inject constructor(
 ) : AuthRepository {
 
     override val currentUser = MutableStateFlow(firebaseAuth.currentUser?.toAuthUser())
+
+    private val _signedOut = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    override val signedOut: SharedFlow<Unit> = _signedOut
 
     init {
         // FirebaseAuth garde l'utilisateur connecté en cache disque entre deux lancements de
@@ -74,6 +79,7 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun signOut() {
         firebaseAuth.signOut()
+        _signedOut.emit(Unit)
         // Firebase oublie la session, mais le système garde de son côté la trace du compte
         // Google associé à l'app : sans ce nettoyage, la reconnexion suivante peut resélectionner
         // le compte précédent sans jamais repasser par le sélecteur. Échec sans conséquence (la
