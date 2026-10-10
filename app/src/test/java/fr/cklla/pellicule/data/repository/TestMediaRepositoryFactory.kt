@@ -5,6 +5,7 @@ import fr.cklla.pellicule.data.local.MediaDao
 import fr.cklla.pellicule.data.local.OutboxDao
 import fr.cklla.pellicule.data.local.TransactionRunner
 import fr.cklla.pellicule.data.remote.FakeRemoteMediaDataSource
+import fr.cklla.pellicule.data.sync.InitialUploadStore
 import fr.cklla.pellicule.data.sync.MediaSyncer
 import fr.cklla.pellicule.data.sync.OutboxScheduler
 import fr.cklla.pellicule.domain.repository.AuthRepository
@@ -48,7 +49,8 @@ fun fakeSyncer(
     episodeDao: EpisodeDao = FakeEpisodeDao(),
     authRepository: AuthRepository = FakeAuthRepository(),
     transactions: TransactionRunner = ImmediateTransactionRunner,
-) = MediaSyncer(remote, outboxDao, mediaDao, episodeDao, transactions, authRepository)
+    initialUpload: InitialUploadStore = FakeInitialUploadStore(),
+) = MediaSyncer(remote, outboxDao, mediaDao, episodeDao, transactions, authRepository, initialUpload)
 
 /**
  * Construit un [MediaRepositoryImpl] de test, avec des fakes par défaut pour le serveur/l'auth : la
@@ -97,3 +99,15 @@ fun fakeEpisodeRepository(
     transactions = ImmediateTransactionRunner,
     outboxScheduler = scheduler,
 )
+
+/** Mémoire en mémoire de l'envoi initial : le test peut la préremplir ou la relire. */
+class FakeInitialUploadStore(var doneFor: String? = null) : InitialUploadStore {
+    override fun isDone(userId: String) = doneFor == userId
+    override fun markDone(userId: String) {
+        doneFor = userId
+    }
+
+    override fun clear() {
+        doneFor = null
+    }
+}

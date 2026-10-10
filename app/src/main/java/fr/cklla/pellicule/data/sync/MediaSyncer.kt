@@ -51,6 +51,7 @@ class MediaSyncer @Inject constructor(
     private val episodeDao: EpisodeDao,
     private val transactions: TransactionRunner,
     private val authRepository: AuthRepository,
+    private val initialUpload: InitialUploadStore,
 ) {
 
     // Protège le compteur de génération et rend atomiques, vis-à-vis du miroir, la sortie d'une
@@ -105,17 +106,25 @@ class MediaSyncer @Inject constructor(
     }
 
     /**
-     * À la première connexion sur un serveur encore vide, met tout le suivi local (contenus puis
-     * épisodes) dans la file d'envoi. Passer par la file protège ces lignes du miroir tant qu'elles
-     * ne sont pas parties, et un échec réseau se rejoue. Une lecture du serveur qui échoue lève son
-     * exception : elle n'est jamais prise pour un serveur vide. Renvoie `true` si la file a été remplie.
+     * Au premier lancement d'un compte sur cet appareil, met dans la file d'envoi ce que le suivi local
+     * a de plus que le serveur : les contenus qu'il n'a pas, puis les épisodes vus qu'il n'a pas (y
+     * compris pour un contenu qu'il a déjà). Le serveur n'est jamais écrasé, seulement complété. Passer
+     * par la file protège ces lignes du miroir tant qu'elles ne sont pas parties, et un échec réseau se
+     * rejoue.
      *
-     * Appelée à chaque démarrage de la synchro, donc aussi à chaque nouvelle tentative tant que la
-     * file n'est pas partie : ce qui y attend déjà n'est pas remis en double.
+     * N'a lieu qu'une fois par compte et par appareil ([InitialUploadStore]) : ensuite le serveur fait
+     * foi, et un contenu supprimé ailleurs n'est plus renvoyé depuis un Room resté en retard. Une
+     * lecture du serveur qui échoue lève son exception, sans marquer l'envoi comme fait : elle n'est
+     * jamais prise pour un serveur vide. Renvoie `true` si la file a été remplie.
+     *
+     * Appelée à chaque démarrage de la synchro, donc aussi à chaque nouvelle tentative tant que le
+     * marquage n'est pas posé : ce qui attend déjà dans la file n'est pas remis en double.
      */
-    suspend fun enqueueLocalIfServerEmpty(): Boolean {
-        if (remote.fetchAll().media.isNotEmpty()) return false
-        return stateLock.withLock {
+    suspend fun enqueueLocalOnFirstSync(): Boolean {
+        val userId = authRepository.currentUser.value?.uid ?: return false
+        if (initialUpload.isDone(userId)) return false
+        val snapshot = remote.fetchAll()
+        val queued = stateLock.withLock {
             transactions.run {
                 val pending = outboxDao.getAll()
                 val pendingUpserts = pending
@@ -126,11 +135,15 @@ class MediaSyncer @Inject constructor(
                     .groupBy({ it.mediaId }, { it.episodeKeys() })
                     .mapValues { (_, keys) -> keys.flatten().toSet() }
 
-                val mediaToSend = mediaDao.getAllOnce().map { it.id }.filter { it !in pendingUpserts }
+                val remoteIds = snapshot.media.mapTo(mutableSetOf()) { it.id }
+                val mediaToSend = mediaDao.getAllOnce().map { it.id }
+                    .filter { it !in remoteIds && it !in pendingUpserts }
                 mediaToSend.forEach { outboxDao.enqueueUpsert(it) }
                 val episodesToSend = episodeDao.getAllWatchedOnce()
                     .groupBy({ it.mediaId }, { EpisodeKey(it.seasonNumber, it.episodeNumber) })
-                    .mapValues { (mediaId, keys) -> keys.toSet() - pendingAdds[mediaId].orEmpty() }
+                    .mapValues { (mediaId, keys) ->
+                        keys.toSet() - snapshot.watchedEpisodes[mediaId].orEmpty() - pendingAdds[mediaId].orEmpty()
+                    }
                     .filterValues { it.isNotEmpty() }
                 episodesToSend.forEach { (mediaId, keys) ->
                     outboxDao.enqueueEpisodes(PendingOperationKind.ADD_EPISODES, mediaId, keys)
@@ -138,6 +151,10 @@ class MediaSyncer @Inject constructor(
                 mediaToSend.isNotEmpty() || episodesToSend.isNotEmpty()
             }
         }
+        // Après la validation de la transaction : un arrêt entre les deux rejoue la mise en file, qui
+        // ne double rien.
+        initialUpload.markDone(userId)
+        return queued
     }
 
     /** Efface le suivi local et la file d'envoi : rien du compte qui se déconnecte ne doit rester. */
@@ -148,6 +165,7 @@ class MediaSyncer @Inject constructor(
                 mediaDao.clearAll()
                 outboxDao.clearAll()
             }
+            initialUpload.clear()
         }
     }
 

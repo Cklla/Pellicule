@@ -6,6 +6,7 @@ import fr.cklla.pellicule.data.remote.FakeRemoteMediaDataSource
 import fr.cklla.pellicule.data.remote.PermanentRemoteException
 import fr.cklla.pellicule.data.repository.FakeAuthRepository
 import fr.cklla.pellicule.data.repository.FakeEpisodeDao
+import fr.cklla.pellicule.data.repository.FakeInitialUploadStore
 import fr.cklla.pellicule.data.repository.FakeMediaDao
 import fr.cklla.pellicule.data.repository.FakeOutboxDao
 import fr.cklla.pellicule.data.repository.fakeSyncer
@@ -33,7 +34,8 @@ class MediaSyncerTest {
     private val episodeDao = FakeEpisodeDao()
     private val outbox = FakeOutboxDao()
     private val auth = FakeAuthRepository()
-    private val syncer = fakeSyncer(remote, outbox, mediaDao, episodeDao, auth)
+    private val initialUpload = FakeInitialUploadStore()
+    private val syncer = fakeSyncer(remote, outbox, mediaDao, episodeDao, auth, initialUpload = initialUpload)
 
     private val fallout = Media(id = "fallout", title = "Fallout", type = MediaType.SERIE, status = WatchStatus.EN_COURS)
     private val dune = Media(id = "dune", title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR)
@@ -340,7 +342,7 @@ class MediaSyncerTest {
         storeLocally(dune)
         episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1), WatchedEpisodeEntity("fallout", 2, 1)))
 
-        assertTrue(syncer.enqueueLocalIfServerEmpty())
+        assertTrue(syncer.enqueueLocalOnFirstSync())
         syncer.flush()
 
         assertEquals(setOf("upsert:fallout", "upsert:dune", "add:fallout"), remote.writeLog.toSet())
@@ -349,14 +351,15 @@ class MediaSyncerTest {
     }
 
     @Test
-    fun `la mise en file initiale rejouee avant l'envoi ne met rien en double`() = runTest {
+    fun `la mise en file initiale rejouee avant le marquage ne met rien en double`() = runTest {
         storeLocally(fallout)
         episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1)))
-        assertTrue(syncer.enqueueLocalIfServerEmpty())
+        assertTrue(syncer.enqueueLocalOnFirstSync())
         val firstPass = outbox.pending.toList()
 
-        // Nouvelle tentative de la synchro alors que rien n'est encore parti : serveur toujours vide.
-        assertFalse(syncer.enqueueLocalIfServerEmpty())
+        // Arrêt du processus entre la mise en file et le marquage : la tentative suivante repart de zéro.
+        initialUpload.clear()
+        assertFalse(syncer.enqueueLocalOnFirstSync())
 
         assertEquals(firstPass, outbox.pending)
     }
@@ -369,7 +372,7 @@ class MediaSyncerTest {
         enqueue(PendingOperationKind.UPSERT_MEDIA, "fallout")
         enqueue(PendingOperationKind.ADD_EPISODES, "fallout", setOf(EpisodeKey(1, 2)))
 
-        assertTrue(syncer.enqueueLocalIfServerEmpty())
+        assertTrue(syncer.enqueueLocalOnFirstSync())
         syncer.flush()
 
         assertEquals(1, remote.upsertedMedia.size)
@@ -378,30 +381,106 @@ class MediaSyncerTest {
     }
 
     @Test
-    fun `la mise en file initiale ne fait rien si le serveur a deja du contenu`() = runTest {
+    fun `un serveur deja partiellement peuple recoit seulement les contenus qui lui manquent`() = runTest {
+        storeLocally(fallout)
         storeLocally(dune)
         remote.media.value = listOf(fallout)
 
-        assertFalse(syncer.enqueueLocalIfServerEmpty())
+        assertTrue(syncer.enqueueLocalOnFirstSync())
+        syncer.flush()
+        syncer.mirror()
 
-        assertTrue(outbox.pending.isEmpty())
+        assertEquals(listOf("upsert:dune"), remote.writeLog)
+        assertEquals(setOf("fallout", "dune"), mediaDao.getAllIds().toSet())
+        assertEquals(setOf("fallout", "dune"), remote.media.value.mapTo(mutableSetOf()) { it.id })
     }
 
     @Test
-    fun `la mise en file initiale ne fait rien sans suivi local`() = runTest {
-        assertFalse(syncer.enqueueLocalIfServerEmpty())
-        assertTrue(outbox.pending.isEmpty())
+    fun `un contenu deja sur le serveur recoit les episodes vus qu'il n'a pas`() = runTest {
+        storeLocally(fallout)
+        episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1), WatchedEpisodeEntity("fallout", 1, 2)))
+        remote.media.value = listOf(fallout)
+        remote.episodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1)))
+
+        assertTrue(syncer.enqueueLocalOnFirstSync())
+        syncer.flush()
+
+        assertEquals(listOf(setOf(EpisodeKey(1, 2))), remote.addedEpisodes.map { it.second })
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)), remote.episodes.value["fallout"])
     }
 
     @Test
-    fun `la mise en file initiale sur une lecture ratee leve l'erreur au lieu de supposer un serveur vide`() = runTest {
+    fun `un serveur deja a jour ne recoit rien mais l'envoi initial est marque fait`() = runTest {
+        storeLocally(fallout)
+        episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1)))
+        remote.media.value = listOf(fallout)
+        remote.episodes.value = mapOf("fallout" to setOf(EpisodeKey(1, 1)))
+
+        assertFalse(syncer.enqueueLocalOnFirstSync())
+
+        assertTrue(outbox.pending.isEmpty())
+        assertTrue(initialUpload.isDone("fake-uid"))
+    }
+
+    @Test
+    fun `apres l'envoi initial un contenu supprime ailleurs n'est pas renvoye`() = runTest {
+        storeLocally(fallout)
+        assertTrue(syncer.enqueueLocalOnFirstSync())
+        syncer.flush()
+
+        // Supprimé depuis un autre appareil ; ce Room, resté en retard, ne doit pas le ressusciter.
+        remote.media.value = emptyList()
+        assertFalse(syncer.enqueueLocalOnFirstSync())
+        syncer.mirror()
+
+        assertTrue(outbox.pending.isEmpty())
+        assertTrue(mediaDao.getAllIds().isEmpty())
+    }
+
+    @Test
+    fun `l'envoi initial est propre a chaque compte`() = runTest {
+        storeLocally(dune)
+        initialUpload.doneFor = "un-autre-compte"
+
+        assertTrue(syncer.enqueueLocalOnFirstSync())
+
+        assertTrue(initialUpload.isDone("fake-uid"))
+    }
+
+    @Test
+    fun `sans compte connecte l'envoi initial ne fait rien et n'est pas marque`() = runTest {
+        storeLocally(dune)
+        val signedOut = FakeAuthRepository(user = null)
+        val syncerSignedOut = fakeSyncer(remote, outbox, mediaDao, episodeDao, signedOut, initialUpload = initialUpload)
+
+        assertFalse(syncerSignedOut.enqueueLocalOnFirstSync())
+
+        assertTrue(outbox.pending.isEmpty())
+        assertEquals(null, initialUpload.doneFor)
+    }
+
+    @Test
+    fun `la mise en file initiale ne fait rien sans suivi local mais est marquee faite`() = runTest {
+        assertFalse(syncer.enqueueLocalOnFirstSync())
+
+        assertTrue(outbox.pending.isEmpty())
+        assertTrue(initialUpload.isDone("fake-uid"))
+    }
+
+    @Test
+    fun `la mise en file initiale sur une lecture ratee leve l'erreur et sera retentee`() = runTest {
         storeLocally(dune)
         remote.offline = true
 
-        val failure = runCatching { syncer.enqueueLocalIfServerEmpty() }.exceptionOrNull()
+        val failure = runCatching { syncer.enqueueLocalOnFirstSync() }.exceptionOrNull()
 
         assertTrue(failure is java.io.IOException)
         assertTrue(outbox.pending.isEmpty())
+        assertFalse(initialUpload.isDone("fake-uid"))
+
+        remote.offline = false
+        assertTrue(syncer.enqueueLocalOnFirstSync())
+        assertEquals(listOf("dune"), outbox.pending.map { it.mediaId })
     }
 
     @Test
@@ -413,5 +492,14 @@ class MediaSyncerTest {
 
         assertTrue(mediaDao.getAllIds().isEmpty())
         assertTrue(outbox.pending.isEmpty())
+    }
+
+    @Test
+    fun `clearLocalData oublie l'envoi initial pour que le prochain compte reparte de zero`() = runTest {
+        initialUpload.markDone("fake-uid")
+
+        syncer.clearLocalData()
+
+        assertFalse(initialUpload.isDone("fake-uid"))
     }
 }

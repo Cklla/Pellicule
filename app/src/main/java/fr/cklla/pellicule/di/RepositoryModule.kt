@@ -18,6 +18,8 @@ import fr.cklla.pellicule.data.repository.SynopsisRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvDetailsRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvShowInfoRepositoryImpl
 import fr.cklla.pellicule.data.repository.WatchProvidersRepositoryImpl
+import fr.cklla.pellicule.data.sync.InitialUploadPrefs
+import fr.cklla.pellicule.data.sync.InitialUploadStore
 import fr.cklla.pellicule.data.sync.OutboxScheduler
 import fr.cklla.pellicule.data.sync.WorkManagerOutboxScheduler
 import fr.cklla.pellicule.domain.repository.AuthRepository
@@ -89,4 +91,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindOutboxScheduler(impl: WorkManagerOutboxScheduler): OutboxScheduler
+
+    @Binds
+    @Singleton
+    abstract fun bindInitialUploadStore(impl: InitialUploadPrefs): InitialUploadStore
 }
