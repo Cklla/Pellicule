@@ -313,6 +313,27 @@ class MediaRepositoryImplTest {
     }
 
     @Test
+    fun `une session absente sans deconnexion ne vide rien`() = runTest {
+        repository.addMedia(dune)
+
+        authRepository.dropSessionWithoutSignOut()
+
+        assertEquals(1, repository.observeMedia().first().size)
+        assertEquals(0, firestoreDataSource.clearLocalCacheCallCount)
+    }
+
+    @Test
+    fun `un lancement sans session ne vide pas le suivi local`() = runTest {
+        authRepository = FakeAuthRepository(user = null)
+        dao.insert(dune.copy(id = "local-1").toEntity())
+
+        buildRepository()
+
+        assertEquals(1, repository.observeMedia().first().size)
+        assertEquals(0, firestoreDataSource.clearLocalCacheCallCount)
+    }
+
+    @Test
     fun `deconnexion purge aussi le cache disque de Firestore`() = runTest {
         repository.addMedia(dune)
 

@@ -7,6 +7,7 @@ import fr.cklla.pellicule.data.local.entity.WatchedEpisodeEntity
 import fr.cklla.pellicule.data.remote.firestore.FirestoreMediaDataSource
 import fr.cklla.pellicule.data.remote.firestore.RemoteMedia
 import fr.cklla.pellicule.di.ApplicationScope
+import fr.cklla.pellicule.domain.model.AuthUser
 import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.Resource
@@ -26,11 +27,17 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+private sealed interface AuthEvent {
+    data class UserChanged(val user: AuthUser?) : AuthEvent
+    data object SignedOut : AuthEvent
+}
 
 /**
  * Implémentation Room + Firestore du [MediaRepository].
@@ -62,12 +69,18 @@ class MediaRepositoryImpl @Inject constructor(
     init {
         // `collectLatest` : un changement d'utilisateur (déconnexion, ou reconnexion avec un autre
         // compte) annule proprement l'écoute Firestore précédente avant d'en démarrer une nouvelle.
+        // La purge passe par le même collecteur pour ne jamais tourner en même temps qu'un miroir
+        // en cours. Elle n'est déclenchée que par la déconnexion demandée : un `currentUser` à
+        // `null` est aussi l'état avant le chargement de la session, et effacerait Room à chaque
+        // lancement.
         repositoryScope.launch {
-            authRepository.currentUser.collectLatest { user ->
-                if (user == null) {
-                    clearLocalData()
-                } else {
-                    syncWith(user.uid)
+            merge(
+                authRepository.currentUser.map { AuthEvent.UserChanged(it) },
+                authRepository.signedOut.map { AuthEvent.SignedOut },
+            ).collectLatest { event ->
+                when (event) {
+                    AuthEvent.SignedOut -> clearLocalData()
+                    is AuthEvent.UserChanged -> event.user?.let { syncWith(it.uid) }
                 }
             }
         }

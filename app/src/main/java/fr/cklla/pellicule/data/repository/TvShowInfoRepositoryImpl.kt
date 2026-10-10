@@ -16,7 +16,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** Implémentation Room + TMDB du [TvShowInfoRepository]. */
@@ -30,11 +29,11 @@ class TvShowInfoRepositoryImpl @Inject constructor(
 
     init {
         // Ce cache ne contient que des métadonnées publiques, mais il révèle quelles séries le
-        // compte précédent suivait : il part avec le reste des données locales à la déconnexion.
+        // compte précédent suivait : il part avec le reste des données locales à la déconnexion
+        // demandée par l'utilisateur. Un `currentUser` à `null` ne suffit pas : c'est aussi l'état
+        // avant le chargement de la session.
         repositoryScope.launch {
-            authRepository.currentUser.map { it?.uid }.distinctUntilChanged().collect { uid ->
-                if (uid == null) runCatching { dao.clearAll() }
-            }
+            authRepository.signedOut.collect { runCatching { dao.clearAll() } }
         }
     }
 

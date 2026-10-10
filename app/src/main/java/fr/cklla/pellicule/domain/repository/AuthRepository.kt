@@ -3,6 +3,7 @@ package fr.cklla.pellicule.domain.repository
 import android.content.Context
 import fr.cklla.pellicule.domain.model.AuthUser
 import fr.cklla.pellicule.domain.model.Resource
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -17,6 +18,13 @@ interface AuthRepository {
 
     /** Utilisateur actuellement connecté, ou `null` si personne n'est connecté. */
     val currentUser: StateFlow<AuthUser?>
+
+    /**
+     * Émet une fois par déconnexion demandée par l'utilisateur, une fois la session fermée. Seul
+     * signal à partir duquel les données locales peuvent être purgées : `currentUser` vaut aussi
+     * `null` avant le chargement de la session au lancement, ce qui ne doit rien effacer.
+     */
+    val signedOut: SharedFlow<Unit>
 
     /** Déclenche le flow "Se connecter avec Google" (Credential Manager). */
     suspend fun signIn(context: Context): Resource<AuthUser>
