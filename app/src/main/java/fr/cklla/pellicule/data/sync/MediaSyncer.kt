@@ -109,20 +109,33 @@ class MediaSyncer @Inject constructor(
      * épisodes) dans la file d'envoi. Passer par la file protège ces lignes du miroir tant qu'elles
      * ne sont pas parties, et un échec réseau se rejoue. Une lecture du serveur qui échoue lève son
      * exception : elle n'est jamais prise pour un serveur vide. Renvoie `true` si la file a été remplie.
+     *
+     * Appelée à chaque démarrage de la synchro, donc aussi à chaque nouvelle tentative tant que la
+     * file n'est pas partie : ce qui y attend déjà n'est pas remis en double.
      */
     suspend fun enqueueLocalIfServerEmpty(): Boolean {
         if (remote.fetchAll().media.isNotEmpty()) return false
         return stateLock.withLock {
             transactions.run {
-                val local = mediaDao.getAllOnce()
-                if (local.isEmpty()) return@run false
-                local.forEach { outboxDao.enqueueUpsert(it.id) }
-                episodeDao.getAllWatchedOnce()
+                val pending = outboxDao.getAll()
+                val pendingUpserts = pending
+                    .filter { it.operationKind == PendingOperationKind.UPSERT_MEDIA }
+                    .mapTo(mutableSetOf()) { it.mediaId }
+                val pendingAdds = pending
+                    .filter { it.operationKind == PendingOperationKind.ADD_EPISODES }
+                    .groupBy({ it.mediaId }, { it.episodeKeys() })
+                    .mapValues { (_, keys) -> keys.flatten().toSet() }
+
+                val mediaToSend = mediaDao.getAllOnce().map { it.id }.filter { it !in pendingUpserts }
+                mediaToSend.forEach { outboxDao.enqueueUpsert(it) }
+                val episodesToSend = episodeDao.getAllWatchedOnce()
                     .groupBy({ it.mediaId }, { EpisodeKey(it.seasonNumber, it.episodeNumber) })
-                    .forEach { (mediaId, keys) ->
-                        outboxDao.enqueueEpisodes(PendingOperationKind.ADD_EPISODES, mediaId, keys.toSet())
-                    }
-                true
+                    .mapValues { (mediaId, keys) -> keys.toSet() - pendingAdds[mediaId].orEmpty() }
+                    .filterValues { it.isNotEmpty() }
+                episodesToSend.forEach { (mediaId, keys) ->
+                    outboxDao.enqueueEpisodes(PendingOperationKind.ADD_EPISODES, mediaId, keys)
+                }
+                mediaToSend.isNotEmpty() || episodesToSend.isNotEmpty()
             }
         }
     }

@@ -349,6 +349,35 @@ class MediaSyncerTest {
     }
 
     @Test
+    fun `la mise en file initiale rejouee avant l'envoi ne met rien en double`() = runTest {
+        storeLocally(fallout)
+        episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1)))
+        assertTrue(syncer.enqueueLocalIfServerEmpty())
+        val firstPass = outbox.pending.toList()
+
+        // Nouvelle tentative de la synchro alors que rien n'est encore parti : serveur toujours vide.
+        assertFalse(syncer.enqueueLocalIfServerEmpty())
+
+        assertEquals(firstPass, outbox.pending)
+    }
+
+    @Test
+    fun `la mise en file initiale garde les episodes d'un contenu deja en file`() = runTest {
+        // Contenu modifié avant le premier envoi : sa mise à jour attend, pas ses épisodes déjà vus.
+        storeLocally(fallout)
+        episodeDao.insertAll(listOf(WatchedEpisodeEntity("fallout", 1, 1), WatchedEpisodeEntity("fallout", 1, 2)))
+        enqueue(PendingOperationKind.UPSERT_MEDIA, "fallout")
+        enqueue(PendingOperationKind.ADD_EPISODES, "fallout", setOf(EpisodeKey(1, 2)))
+
+        assertTrue(syncer.enqueueLocalIfServerEmpty())
+        syncer.flush()
+
+        assertEquals(1, remote.upsertedMedia.size)
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)), remote.episodes.value["fallout"])
+        assertEquals(listOf(setOf(EpisodeKey(1, 2)), setOf(EpisodeKey(1, 1))), remote.addedEpisodes.map { it.second })
+    }
+
+    @Test
     fun `la mise en file initiale ne fait rien si le serveur a deja du contenu`() = runTest {
         storeLocally(dune)
         remote.media.value = listOf(fallout)
