@@ -5,7 +5,7 @@ import java.security.SecureRandom
 
 /**
  * Nonce de la connexion Google. Supabase vérifie que le jeton Google contient bien le nonce de la
- * demande, ce que Firebase ne faisait pas : Google reçoit la version **hachée** (SHA-256, en
+ * demande : Google reçoit la version **hachée** (SHA-256, en
  * hexadécimal), Supabase la version **brute**, dont il recalcule lui-même le haché.
  */
 internal class GoogleNonce private constructor(val raw: String) {

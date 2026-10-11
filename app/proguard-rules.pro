@@ -1,7 +1,7 @@
 # Règles R8 pour le build de release.
 #
 # La plupart des bibliothèques du projet embarquent déjà les leurs (Retrofit, Moshi, Room, Hilt,
-# Firebase, OkHttp) : rien à redire ici pour elles. Seul Moshi en mode réflexion a besoin d'aide,
+# OkHttp) : rien à redire ici pour elles. Seul Moshi en mode réflexion a besoin d'aide,
 # parce qu'il lit les noms des propriétés Kotlin à l'exécution — noms que R8 renomme par défaut.
 
 # Métadonnées Kotlin : sans elles, l'adaptateur réflexif de Moshi ne sait plus reconstruire les

@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
-/** Double de test en mémoire : pas de vrai Credential Manager/Firebase à solliciter ici. */
+/** Double de test en mémoire : pas de vrai Credential Manager/Supabase à solliciter ici. */
 class FakeAuthRepository(
     user: AuthUser? = AuthUser(uid = "fake-uid", displayName = "Spectateur Test"),
     /** Résultat renvoyé par [signIn], configurable au cas par cas selon le test. */

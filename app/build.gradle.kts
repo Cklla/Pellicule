@@ -8,9 +8,6 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.androidx.room)
-    // Lit google-services.json et génère les ressources/config nécessaires aux SDK Firebase
-    // (Auth, Firestore) à la compilation.
-    alias(libs.plugins.google.services)
 }
 
 // La clé API TMDB vit uniquement dans local.properties, jamais dans le code source. On l'expose
@@ -134,9 +131,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
-    // Pont .await() entre les Task Google Play Services (FirebaseAuth.signInWithCredential...)
-    // et les coroutines, pour éviter les callbacks imbriqués dans AuthRepositoryImpl.
-    implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.androidx.navigation.compose)
 
     // Persistance locale (cache offline)
@@ -159,7 +153,7 @@ dependencies {
     implementation(libs.coil.compose)
 
     // Réseau : recherche de contenus via l'API TMDB (seul usage de Retrofit/Moshi, le suivi
-    // lui-même reste stocké via Room/Firestore).
+    // lui-même reste stocké via Room et Supabase).
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.converter.moshi)
     implementation(libs.moshi.kotlin)
@@ -179,19 +173,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.okhttp)
 
-    // Firebase : Firestore (source de vérité distante du suivi) + Auth (identifie l'utilisateur,
-    // nécessaire aux règles de sécurité Firestore). Le BoM aligne les versions des différents
-    // modules Firebase entre eux, pas besoin de préciser de version sur chacun.
     coreLibraryDesugaring(libs.desugar.jdk.libs)
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.auth)
-    implementation(libs.firebase.firestore)
-    // App Check : atteste que les appels à Firestore/Auth viennent bien de cette app installée
-    // depuis le Play Store, et pas d'un script ou d'une app reconstruite à partir du binaire.
-    implementation(libs.firebase.appcheck.playintegrity)
-    // Le fournisseur Play Integrity ne peut rien attester sur un émulateur ou un build local : en
-    // debug, App Check s'appuie sur un jeton à déclarer dans la console Firebase.
-    debugImplementation(libs.firebase.appcheck.debug)
 
     // Connexion Google (Credential Manager)
     implementation(libs.androidx.credentials)
