@@ -197,9 +197,10 @@ class MediaRepositoryImpl @Inject constructor(
         // Rejoue les écritures restées en attente d'un lancement précédent.
         outboxScheduler.requestFlush()
         flow {
-            // Premier lancement sur un serveur vide : le suivi local part dans la file d'envoi. Une
-            // lecture du serveur qui échoue lève ici, elle n'est jamais prise pour un serveur vide.
-            if (syncer.enqueueLocalIfServerEmpty()) outboxScheduler.requestFlush()
+            // Premier lancement du compte sur cet appareil : le suivi local que le serveur n'a pas part
+            // dans la file d'envoi. Une lecture du serveur qui échoue lève ici, elle n'est jamais prise
+            // pour un serveur vide.
+            if (syncer.enqueueLocalOnFirstSync()) outboxScheduler.requestFlush()
             // Une première lecture sans attendre l'écoute temps réel : si celle-ci ne s'établit pas,
             // le suivi est tout de même recopié, puis relu à chaque nouvelle tentative.
             emit(Unit)

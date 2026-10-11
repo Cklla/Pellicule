@@ -483,7 +483,7 @@ class MediaRepositoryImplTest {
     }
 
     @Test
-    fun `un serveur deja peuple n'est pas ecrase par le suivi local, le miroir fait ensuite autorite`() = runTest {
+    fun `un serveur deja peuple est complete par le suivi local au premier lancement sans rien perdre`() = runTest {
         authRepository = FakeAuthRepository(user = null)
         remote = FakeRemoteMediaDataSource().apply { media.value = listOf(dune.copy(id = "distant-1")) }
         buildRepository()
@@ -491,8 +491,9 @@ class MediaRepositoryImplTest {
 
         authRepository.signInAs(AuthUser(uid = "existing-user", displayName = "Spectateur"))
 
-        assertTrue(remote.upsertedMedia.isEmpty())
-        assertEquals(listOf("distant-1"), repository.observeMedia().first().map { it.id })
+        assertEquals(listOf("local-1"), remote.upsertedMedia.map { it.id })
+        assertEquals(setOf("distant-1", "local-1"), repository.observeMedia().first().mapTo(mutableSetOf()) { it.id })
+        assertEquals(setOf("distant-1", "local-1"), remote.media.value.mapTo(mutableSetOf()) { it.id })
     }
 
     @Test

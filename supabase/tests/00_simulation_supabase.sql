@@ -1,6 +1,9 @@
 -- Reproduit le strict minimum de Supabase pour jouer les migrations sur un Postgres nu :
 -- rôles, schéma `auth`, `auth.uid()` et publication Realtime. Inutile sur un vrai projet
 -- Supabase, où tout cela existe déjà.
+--
+-- Aucun droit par défaut sur les tables du schéma public : un projet Supabase récent n'en accorde
+-- pas aux rôles de l'API, chaque table doit recevoir ses GRANT dans les migrations.
 
 create role anon nologin;
 create role authenticated nologin;
@@ -18,6 +21,5 @@ $$;
 grant usage on schema public, auth to anon, authenticated;
 grant execute on function auth.uid() to anon, authenticated;
 grant select on auth.users to authenticated;
-alter default privileges in schema public grant all on tables to anon, authenticated;
 
 create publication supabase_realtime;
