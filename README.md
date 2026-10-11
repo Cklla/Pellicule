@@ -1,7 +1,7 @@
 # Pellicule
 
 Application Android personnelle de suivi de films, séries et anime : ce qui est à voir, en cours ou
-vu, avec recherche via l'API TMDB et synchronisation entre appareils grâce à Firebase.
+vu, avec recherche via l'API TMDB et synchronisation entre appareils grâce à Supabase.
 Synchronisation bidirectionnelle optionnelle avec un serveur Jellyfin.
 
 ## Fonctionnalités
@@ -20,7 +20,7 @@ Synchronisation bidirectionnelle optionnelle avec un serveur Jellyfin.
 - **Récap annuel** : bilan de l'année du 25 décembre au 31 janvier, avec notification locale.
 - **Récap en images** : suite de slides façon *Wrapped* (total, coups de cœur par type, faits de
   l'année, mosaïque des affiches).
-- **Compte et synchronisation** : connexion Google, suivi synchronisé entre appareils via Firestore,
+- **Compte et synchronisation** : connexion Google, suivi synchronisé entre appareils via Supabase,
   utilisable hors ligne.
 - **Jellyfin (optionnel)** : le statut vu se synchronise dans les deux sens avec un serveur. Sans
   serveur, tout reste géré à la main.
@@ -48,7 +48,7 @@ Synchronisation bidirectionnelle optionnelle avec un serveur Jellyfin.
 | Réseau | Retrofit + Moshi (TMDB, Jellyfin) |
 | Injection de dépendances | Hilt |
 | Arrière-plan | WorkManager (rappels d'épisodes, notification du récap) |
-| Cloud | Firebase Firestore + Auth (Google Sign-In) |
+| Cloud | Supabase (Postgres + Auth par jeton Google + Realtime), via supabase-kt |
 | Images | Coil |
 | Tests | JUnit4 + kotlinx-coroutines-test, avec des fakes (ni mock ni Robolectric) |
 
@@ -58,7 +58,7 @@ MVVM, avec le Repository comme source de vérité unique :
 
 ```
 UI (Compose) ↔ ViewModel ↔ Repository ─┬─ Room (cache local, hors ligne)
-                                       ├─ Firestore / Auth (synchro distante)
+                                       ├─ Supabase (synchro distante)
                                        └─ Retrofit (TMDB, Jellyfin optionnel)
 ```
 
@@ -66,30 +66,36 @@ UI (Compose) ↔ ViewModel ↔ Repository ─┬─ Room (cache local, hors lign
   par Hilt.
 - **Room est la seule source lue par l'UI**, même en ligne : affichage instantané et usage hors
   ligne complet.
-- Les écritures vont d'abord dans Room, puis vers Firestore en best-effort ; Firestore fait autorité
-  sur le contenu dès qu'un compte est connecté et est mirroré dans Room.
+- Les écritures vont d'abord dans Room, avec une file d'opérations en attente rejouée par WorkManager
+  dès que le réseau revient ; Supabase fait autorité sur le contenu dès qu'un compte est connecté et
+  est mirroré dans Room.
 - Jellyfin est un module indépendant : rien du suivi de base n'en dépend.
 
 ## Installation
 
 **Prérequis** : Android Studio avec JDK 17+, un appareil ou émulateur en API 24 ou plus, une clé API
-[TMDB](https://www.themoviedb.org/settings/api), un projet [Firebase](https://console.firebase.google.com/)
-avec Firestore et Google Sign-In activés. Un serveur [Jellyfin](https://jellyfin.org/) est optionnel.
+[TMDB](https://www.themoviedb.org/settings/api), un projet [Supabase](https://supabase.com/) avec
+le fournisseur Google activé. Un serveur [Jellyfin](https://jellyfin.org/) est optionnel.
 
 1. **Cloner** : `git clone https://github.com/Cklla/Pellicule`
 2. **Clé TMDB** : dans `local.properties` (ignoré par git) :
    ```properties
    sdk.dir=/chemin/vers/le/sdk/android
    TMDB_API_KEY=votre_clé_tmdb
+   SUPABASE_URL=https://votre-projet.supabase.co
+   SUPABASE_PUBLISHABLE_KEY=sb_publishable_…
+   GOOGLE_WEB_CLIENT_ID=identifiant_client_web_google
    ```
-3. **Firebase** : créer une application Android `fr.cklla.pellicule`, activer Firestore et le
-   fournisseur Google d'Authentication, déclarer le SHA-1 du keystore de debug
-   (`./gradlew signingReport`), puis placer `google-services.json` dans `app/` (ignoré par git).
-4. **App Check** : enregistrer l'app avec **Play Integrity**. En debug, le jeton affiché dans logcat
-   se déclare dans *App Check → l'app → ⋮ → Gérer les jetons de débogage*.
-5. **Règles Firestore** : copier `firestore.rules` dans *Firestore Database → Règles* et publier.
-   Chaque utilisateur n'accède qu'à ses données, et la forme de chaque document est validée.
-6. **Lancer** : `./gradlew assembleDebug`, ou Run ▶ dans Android Studio.
+3. **Supabase** : appliquer les migrations de `supabase/migrations/` dans l'ordre (éditeur SQL du
+   tableau de bord ou CLI Supabase). Elles créent les tables `media` et `watched_episode`, les
+   droits, la sécurité par ligne (chaque utilisateur n'accède qu'à ses données), la publication
+   Realtime et la liste `allowed_email` des adresses autorisées à s'inscrire. Ajouter ses adresses
+   (`insert into public.allowed_email (email) values ('…');`), brancher le hook *Before User Created*
+   (Authentication → Hooks) et activer le fournisseur Google avec l'identifiant client Web.
+4. **Google Cloud** : un client OAuth *Web* (celui déclaré dans Supabase) et un client *Android*
+   portant le SHA-1 du keystore utilisé (`./gradlew signingReport`, plus celui de Play App Signing
+   pour un build du Play Store).
+5. **Lancer** : `./gradlew assembleDebug`, ou Run ▶ dans Android Studio.
 
 ## Synchronisation Jellyfin
 
@@ -106,14 +112,14 @@ le serveur reçoit des épisodes postérieurs au dernier épisode vu (nouvelle s
 ./gradlew testDebugUnitTest
 ```
 
-Les tests couvrent les ViewModels, les repositories (synchro Firestore ↔ Room, Jellyfin, erreurs) et
+Les tests couvrent les ViewModels, les repositories (synchro Supabase ↔ Room, Jellyfin, erreurs) et
 la logique pure (récap, calendrier, filtres), avec des fakes pour rester rapides et déterministes.
 
 ## Structure du projet
 
 ```
 app/src/main/java/fr/cklla/pellicule/
-├── data/           # Room, clients distants (TMDB, Firestore, Jellyfin), repositories
+├── data/           # Room, clients distants (TMDB, Supabase, Jellyfin), repositories
 ├── di/             # Modules Hilt
 ├── domain/         # Modèles, interfaces de repository, cas d'usage, logique pure
 ├── notification/   # Canaux, Workers et notifications locales
@@ -124,7 +130,7 @@ app/src/main/java/fr/cklla/pellicule/
 
 - **TMDB comme unique fournisseur de métadonnées** : gratuit, couvre films, séries et anime, et c'est
   le fournisseur par défaut de Jellyfin, ce qui rend le mapping d'identifiants direct.
-- **UUID pour `Media.id`** : le même identifiant côté Room et Firestore, sans table de correspondance.
+- **UUID pour `Media.id`** : le même identifiant côté Room et Supabase, sans table de correspondance.
 - **Notifications locales, sans FCM** : un job WorkManager quotidien décide d'après la date de
   l'appareil ; rien n'est synchronisé.
 - **Année de visionnage choisie stockée au 1er juillet à midi** : relue à l'identique quel que soit le

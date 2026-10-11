@@ -33,12 +33,6 @@ class PelliculeApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        // App Check doit être installé avant le premier appel à Firestore ou à Auth, sans quoi
-        // les requêtes partiraient sans jeton d'attestation. `installAppCheck` a une implémentation
-        // par type de build (voir src/debug et src/release) : Play Integrity en release, jeton de
-        // debug sinon.
-        installAppCheck(this)
-
         createNotificationChannels(this)
         // Contrôle des rappels de sortie d'épisodes une fois par jour, calé sur le prochain 9 h
         // local à la première planification (WorkManager peut décaler l'exécution selon
