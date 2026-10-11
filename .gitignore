@@ -45,3 +45,6 @@ Icones/
 
 # Exports de données personnelles (migration)
 import-*.sql
+
+# Cache Python
+__pycache__/
