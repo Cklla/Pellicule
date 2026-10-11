@@ -102,7 +102,7 @@ fun fakeEpisodeRepository(
 
 /** Mémoire en mémoire de l'envoi initial : le test peut la préremplir ou la relire. */
 class FakeInitialUploadStore(var doneFor: String? = null) : InitialUploadStore {
-    override fun isDone(userId: String) = doneFor == userId
+    override fun markedFor() = doneFor
     override fun markDone(userId: String) {
         doneFor = userId
     }

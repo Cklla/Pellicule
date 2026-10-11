@@ -16,7 +16,7 @@ class InitialUploadPrefs @Inject constructor(@ApplicationContext context: Contex
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    override fun isDone(userId: String): Boolean = prefs.getString(KEY_USER_ID, null) == userId
+    override fun markedFor(): String? = prefs.getString(KEY_USER_ID, null)
 
     override fun markDone(userId: String) = prefs.edit(commit = true) { putString(KEY_USER_ID, userId) }
 

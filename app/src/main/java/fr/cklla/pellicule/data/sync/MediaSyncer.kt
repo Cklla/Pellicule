@@ -72,10 +72,15 @@ class MediaSyncer @Inject constructor(
 
     private suspend fun flushQueue(): FlushResult {
         while (true) {
-            val operation = outboxDao.first() ?: return FlushResult.DONE
+            if (outboxDao.first() == null) return FlushResult.DONE
             // Sans compte connecté, le serveur refuserait l'écriture : elle serait prise à tort pour
             // un refus définitif.
             if (!awaitSignedIn()) return FlushResult.RETRY_LATER
+            // File remplie sous un autre compte : elle partirait sur celui-ci. La synchro la purge
+            // (voir enqueueLocalOnFirstSync), l'envoi reprendra ensuite.
+            if (queueBelongsToAnotherAccount()) return FlushResult.RETRY_LATER
+            // Relue après les contrôles : une purge a pu la vider entre-temps.
+            val operation = outboxDao.first() ?: return FlushResult.DONE
             when (send(operation)) {
                 SendOutcome.FAILED -> return FlushResult.RETRY_LATER
                 SendOutcome.SENT, SendOutcome.REJECTED -> complete(operation)
@@ -117,12 +122,21 @@ class MediaSyncer @Inject constructor(
      * lecture du serveur qui échoue lève son exception, sans marquer l'envoi comme fait : elle n'est
      * jamais prise pour un serveur vide. Renvoie `true` si la file a été remplie.
      *
+     * Un marquage au nom d'un autre compte prouve que Room et la file viennent de ce compte, resté
+     * connecté sans passer par la déconnexion (session invalidée côté serveur, purge en échec) : ils
+     * sont purgés, jamais envoyés au compte courant.
+     *
      * Appelée à chaque démarrage de la synchro, donc aussi à chaque nouvelle tentative tant que le
      * marquage n'est pas posé : ce qui attend déjà dans la file n'est pas remis en double.
      */
     suspend fun enqueueLocalOnFirstSync(): Boolean {
         val userId = authRepository.currentUser.value?.uid ?: return false
-        if (initialUpload.isDone(userId)) return false
+        val markedFor = initialUpload.markedFor()
+        if (markedFor == userId) return false
+        if (markedFor != null) {
+            SyncLog.info("Suivi local d'un autre compte : purgé sans envoi")
+            clearLocalData()
+        }
         val snapshot = remote.fetchAll()
         val queued = stateLock.withLock {
             transactions.run {
@@ -207,6 +221,11 @@ class MediaSyncer @Inject constructor(
                 outboxDao.delete(operation.seq)
             }
         }
+    }
+
+    private fun queueBelongsToAnotherAccount(): Boolean {
+        val markedFor = initialUpload.markedFor() ?: return false
+        return markedFor != authRepository.currentUser.value?.uid
     }
 
     private suspend fun awaitSignedIn(): Boolean {

@@ -438,13 +438,40 @@ class MediaSyncerTest {
     }
 
     @Test
-    fun `l'envoi initial est propre a chaque compte`() = runTest {
+    fun `le suivi local d'un autre compte est purge sans etre envoye au compte courant`() = runTest {
         storeLocally(dune)
+        enqueue(PendingOperationKind.UPSERT_MEDIA, "dune")
         initialUpload.doneFor = "un-autre-compte"
 
-        assertTrue(syncer.enqueueLocalOnFirstSync())
+        assertFalse(syncer.enqueueLocalOnFirstSync())
+        syncer.flush()
 
+        assertTrue(mediaDao.getAllOnce().isEmpty())
+        assertTrue(outbox.pending.isEmpty())
+        assertTrue(remote.writeLog.isEmpty())
         assertTrue(initialUpload.isDone("fake-uid"))
+    }
+
+    @Test
+    fun `flush n'envoie pas une file remplie sous un autre compte`() = runTest {
+        storeLocally(dune)
+        enqueue(PendingOperationKind.UPSERT_MEDIA, "dune")
+        initialUpload.doneFor = "un-autre-compte"
+
+        assertEquals(FlushResult.RETRY_LATER, syncer.flush())
+
+        assertTrue(remote.writeLog.isEmpty())
+        assertEquals(1, outbox.pending.size)
+    }
+
+    @Test
+    fun `flush envoie normalement avant tout envoi initial`() = runTest {
+        storeLocally(dune)
+        enqueue(PendingOperationKind.UPSERT_MEDIA, "dune")
+
+        assertEquals(FlushResult.DONE, syncer.flush())
+
+        assertEquals(listOf("upsert:dune"), remote.writeLog)
     }
 
     @Test
