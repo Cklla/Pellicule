@@ -6,7 +6,10 @@ package fr.cklla.pellicule.data.sync
  * se rejouerait à chaque démarrage et ressusciterait ce qui a été supprimé ailleurs depuis.
  */
 interface InitialUploadStore {
-    fun isDone(userId: String): Boolean
+    /** Compte pour lequel l'envoi initial a été fait, `null` s'il n'a jamais eu lieu sur cet appareil. */
+    fun markedFor(): String?
+
+    fun isDone(userId: String): Boolean = markedFor() == userId
     fun markDone(userId: String)
 
     /** Oublie la mémoire : appelé à la déconnexion, en même temps que le suivi local est vidé. */
