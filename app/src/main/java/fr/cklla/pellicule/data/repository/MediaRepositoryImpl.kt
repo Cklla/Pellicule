@@ -20,6 +20,7 @@ import fr.cklla.pellicule.domain.util.TimeSource
 import fr.cklla.pellicule.domain.util.watchedAtForYear
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -190,9 +191,15 @@ class MediaRepositoryImpl @Inject constructor(
     //
     // Non annulable : le passage de `currentUser` à `null` qui accompagne la déconnexion arrive en
     // général après le signal de déconnexion (il est dérivé de l'état de session, en arrière-plan),
-    // et `collectLatest` annulerait alors la purge en cours.
+    // et `collectLatest` annulerait alors la purge en cours. Une annulation reçue pendant la purge est
+    // relancée une fois celle-ci terminée, pas avalée avec les erreurs de base.
     private suspend fun clearLocalData() {
-        runCatching { withContext(NonCancellable) { syncer.clearLocalData() } }
+        try {
+            withContext(NonCancellable) { syncer.clearLocalData() }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Exception) {
+        }
     }
 
     // Une erreur de lecture (réseau, serveur) ou de l'écoute temps réel termine le flux. Sans le
