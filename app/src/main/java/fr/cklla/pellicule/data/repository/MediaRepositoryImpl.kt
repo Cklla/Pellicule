@@ -21,6 +21,7 @@ import fr.cklla.pellicule.domain.util.watchedAtForYear
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 private sealed interface AuthEvent {
     data class UserChanged(val user: AuthUser?) : AuthEvent
@@ -185,8 +187,12 @@ class MediaRepositoryImpl @Inject constructor(
     // attente (elles partiraient sinon sur le compte suivant). Enveloppé dans un runCatching parce
     // qu'une exception ici (base verrouillée) annulerait le collecteur de `currentUser` et couperait
     // la synchro pour tout le reste de la vie du process.
+    //
+    // Non annulable : le passage de `currentUser` à `null` qui accompagne la déconnexion arrive en
+    // général après le signal de déconnexion (il est dérivé de l'état de session, en arrière-plan),
+    // et `collectLatest` annulerait alors la purge en cours.
     private suspend fun clearLocalData() {
-        runCatching { syncer.clearLocalData() }
+        runCatching { withContext(NonCancellable) { syncer.clearLocalData() } }
     }
 
     // Une erreur de lecture (réseau, serveur) ou de l'écoute temps réel termine le flux. Sans le

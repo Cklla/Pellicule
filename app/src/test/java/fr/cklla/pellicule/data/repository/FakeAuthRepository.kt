@@ -42,6 +42,15 @@ class FakeAuthRepository(
         _signedOut.emit(Unit)
     }
 
+    /**
+     * Première moitié d'une déconnexion dans l'ordre de production : le signal part avant que l'état
+     * de session ne soit mis à jour. Compléter par [dropSessionWithoutSignOut].
+     */
+    suspend fun emitSignedOutBeforeSessionUpdate() {
+        signOutCallCount++
+        _signedOut.emit(Unit)
+    }
+
     /** Simule une session absente (chargement au lancement, jeton expiré) : aucune déconnexion demandée. */
     fun dropSessionWithoutSignOut() = setSignedOutState()
 

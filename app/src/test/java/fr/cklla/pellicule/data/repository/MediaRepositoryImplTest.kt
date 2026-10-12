@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.data.repository
 
+import fr.cklla.pellicule.data.local.TransactionRunner
 import fr.cklla.pellicule.data.local.entity.WatchedEpisodeEntity
 import fr.cklla.pellicule.data.remote.FakeRemoteMediaDataSource
 import fr.cklla.pellicule.data.sync.PendingOperationKind
@@ -13,6 +14,7 @@ import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.util.TimeSource
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -61,8 +63,11 @@ class MediaRepositoryImplTest {
         status = WatchStatus.A_VOIR,
     )
 
-    private fun buildRepository(scope: CoroutineScope = CoroutineScope(UnconfinedTestDispatcher())) {
-        syncer = fakeSyncer(remote, outboxDao, dao, episodeDao, authRepository)
+    private fun buildRepository(
+        scope: CoroutineScope = CoroutineScope(UnconfinedTestDispatcher()),
+        syncer: fr.cklla.pellicule.data.sync.MediaSyncer = fakeSyncer(remote, outboxDao, dao, episodeDao, authRepository),
+    ) {
+        this.syncer = syncer
         scheduler = TestOutboxScheduler({ syncer.flush() })
         repository = MediaRepositoryImpl(
             mediaDao = dao,
@@ -322,6 +327,35 @@ class MediaRepositoryImplTest {
         authRepository.signOut()
 
         assertTrue(repository.observeMedia().first().isEmpty())
+    }
+
+    @Test
+    fun `la purge n'est pas annulee par la session qui passe a null apres le signal de deconnexion`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var holdNextTransaction = false
+        val gatedTransactions = object : TransactionRunner {
+            override suspend fun <T> run(block: suspend () -> T): T {
+                if (holdNextTransaction) {
+                    holdNextTransaction = false
+                    gate.await()
+                }
+                return block()
+            }
+        }
+        // Compte neuf : le repository de `setUp`, abonné à l'ancien, purgerait les mêmes DAO de son côté.
+        authRepository = FakeAuthRepository()
+        syncer = fakeSyncer(remote, outboxDao, dao, episodeDao, authRepository, transactions = gatedTransactions)
+        buildRepository(syncer = syncer)
+        remote.offline = true
+        repository.addMedia(dune)
+        holdNextTransaction = true
+
+        authRepository.emitSignedOutBeforeSessionUpdate()
+        authRepository.dropSessionWithoutSignOut()
+        gate.complete(Unit)
+
+        assertTrue(repository.observeMedia().first().isEmpty())
+        assertTrue(outboxDao.pending.isEmpty())
     }
 
     @Test
