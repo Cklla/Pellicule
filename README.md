@@ -78,7 +78,7 @@ UI (Compose) ↔ ViewModel ↔ Repository ─┬─ Room (cache local, hors lign
 le fournisseur Google activé. Un serveur [Jellyfin](https://jellyfin.org/) est optionnel.
 
 1. **Cloner** : `git clone https://github.com/Cklla/Pellicule`
-2. **Clé TMDB** : dans `local.properties` (ignoré par git) :
+2. **Clés et configuration** : dans `local.properties` (ignoré par git) :
    ```properties
    sdk.dir=/chemin/vers/le/sdk/android
    TMDB_API_KEY=votre_clé_tmdb
@@ -96,6 +96,17 @@ le fournisseur Google activé. Un serveur [Jellyfin](https://jellyfin.org/) est 
    portant le SHA-1 du keystore utilisé (`./gradlew signingReport`, plus celui de Play App Signing
    pour un build du Play Store).
 5. **Lancer** : `./gradlew assembleDebug`, ou Run ▶ dans Android Studio.
+
+## Sauvegarde et restauration
+
+Le plan gratuit de Supabase n'a pas de sauvegarde automatique. Le job GitLab `sauvegarde_supabase`
+(`.gitlab-ci.yml`, planning quotidien, variable `SUPABASE_DB_URL`) exporte les données du schéma
+`public` dans l'artefact `sauvegarde.sql`, conservé 30 jours ; il maintient aussi le projet actif.
+Le dump ne contient pas les comptes (`auth.users`) : la procédure de restauration, y compris le
+remappage des identifiants de compte vers un nouveau projet, est dans
+[supabase/RESTAURATION.md](supabase/RESTAURATION.md). Les tests d'isolation entre comptes et de
+restauration se lancent avec Docker : `supabase/tests/lancer.sh` et
+`supabase/tests/restaurer_sauvegarde.sh`.
 
 ## Synchronisation Jellyfin
 
