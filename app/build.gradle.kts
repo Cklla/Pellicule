@@ -83,22 +83,6 @@ android {
         }
     }
 
-    // Un build de release signé est un build publiable : sans ces valeurs, il s'installerait mais ne
-    // pourrait ni se connecter ni rien synchroniser. Le build non signé (CI) reste possible sans elles.
-    // Toute tâche de la variante release dépend de `preReleaseBuild` : avec keystore.properties
-    // présent, `test` ou `check` exigent donc aussi ces valeurs.
-    if (keystoreProperties.isNotEmpty()) {
-        val missing = listOf("TMDB_API_KEY", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "GOOGLE_WEB_CLIENT_ID")
-            .filter { localProperties.getProperty(it).isNullOrBlank() }
-        if (missing.isNotEmpty()) {
-            tasks.matching { it.name == "preReleaseBuild" }.configureEach {
-                doFirst {
-                    throw GradleException("Valeurs absentes de local.properties pour un build signé : ${missing.joinToString()}")
-                }
-            }
-        }
-    }
-
     buildTypes {
         release {
             optimization {
@@ -124,6 +108,22 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+}
+
+// Un build de release signé est un build publiable : sans ces valeurs, il s'installerait mais ne
+// pourrait ni se connecter ni rien synchroniser. Le build non signé (CI) reste possible sans elles.
+// Toute tâche de la variante release dépend de `preReleaseBuild` : avec keystore.properties
+// présent, `test` ou `check` exigent donc aussi ces valeurs.
+if (keystoreProperties.isNotEmpty()) {
+    val missing = listOf("TMDB_API_KEY", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "GOOGLE_WEB_CLIENT_ID")
+        .filter { localProperties.getProperty(it).isNullOrBlank() }
+    if (missing.isNotEmpty()) {
+        tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+            doFirst {
+                throw GradleException("Valeurs absentes de local.properties pour un build signé : ${missing.joinToString()}")
+            }
+        }
     }
 }
 
