@@ -112,3 +112,19 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         )
     }
 }
+
+/**
+ * File d'attente des écritures pas encore envoyées au serveur. Nouvelle table sans lien avec les
+ * autres : migration purement additive, aucune donnée existante n'est touchée.
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "CREATE TABLE IF NOT EXISTS `pending_operation` (" +
+                "`seq` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`kind` TEXT NOT NULL, " +
+                "`mediaId` TEXT NOT NULL, " +
+                "`episodes` TEXT)",
+        )
+    }
+}

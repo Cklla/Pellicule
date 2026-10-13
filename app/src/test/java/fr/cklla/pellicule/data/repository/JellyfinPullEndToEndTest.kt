@@ -1,6 +1,6 @@
 package fr.cklla.pellicule.data.repository
 
-import fr.cklla.pellicule.data.remote.firestore.FakeFirestoreMediaDataSource
+import fr.cklla.pellicule.data.remote.FakeRemoteMediaDataSource
 import fr.cklla.pellicule.data.remote.jellyfin.dto.JellyfinEpisodeDto
 import fr.cklla.pellicule.data.remote.jellyfin.dto.JellyfinUserDataDto
 import fr.cklla.pellicule.domain.model.EpisodeKey
@@ -14,8 +14,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Pull Jellyfin de bout en bout avec la vraie pile locale : Room (en mémoire), miroir Firestore →
- * Room et écritures Firestore, sans le SDK. Reproduit la sortie d'une nouvelle saison sur un
+ * Pull Jellyfin de bout en bout avec la vraie pile locale : Room (en mémoire), file d'envoi, miroir
+ * serveur → Room et envois vers le serveur, sans le SDK. Reproduit la sortie d'une nouvelle saison sur un
  * serveur dont la série est déjà vue en entier.
  */
 class JellyfinPullEndToEndTest {
@@ -49,21 +49,25 @@ class JellyfinPullEndToEndTest {
         )
     }
 
-    private class Stack(val firestore: FakeFirestoreMediaDataSource, val episodeDao: FakeEpisodeDao, val mediaRepository: fr.cklla.pellicule.domain.repository.MediaRepository, val episodeRepository: EpisodeRepositoryImpl)
+    private class Stack(val server: FakeRemoteMediaDataSource, val episodeDao: FakeEpisodeDao, val mediaRepository: fr.cklla.pellicule.domain.repository.MediaRepository, val episodeRepository: EpisodeRepositoryImpl)
 
     private fun stack(media: Media, remoteEpisodes: Set<EpisodeKey>): Stack {
-        val firestore = FakeFirestoreMediaDataSource()
+        val server = FakeRemoteMediaDataSource()
         val auth = FakeAuthRepository()
+        val mediaDao = FakeMediaDao()
         val episodeDao = FakeEpisodeDao()
-        firestore.remoteMedia.value = listOf(media)
-        firestore.remoteEpisodes.value = mapOf(media.id to remoteEpisodes)
-        val mediaRepository = fakeMediaRepository(FakeMediaDao(), firestore, auth, episodeDao = episodeDao)
-        val episodeRepository = fakeEpisodeRepository(episodeDao, firestore, auth)
-        return Stack(firestore, episodeDao, mediaRepository, episodeRepository)
+        val outboxDao = FakeOutboxDao()
+        val syncer = fakeSyncer(server, outboxDao, mediaDao, episodeDao, auth)
+        val scheduler = TestOutboxScheduler({ syncer.flush() })
+        server.media.value = listOf(media)
+        server.episodes.value = mapOf(media.id to remoteEpisodes)
+        val mediaRepository = fakeMediaRepository(mediaDao, server, auth, episodeDao = episodeDao, outboxDao = outboxDao, syncer = syncer, scheduler = scheduler)
+        val episodeRepository = fakeEpisodeRepository(episodeDao, server, auth, outboxDao, mediaDao, syncer, scheduler)
+        return Stack(server, episodeDao, mediaRepository, episodeRepository)
     }
 
     @Test
-    fun `le premier episode de la saison 2 lu sur Jellyfin se coche et reste coche apres le miroir Firestore`() = runTest {
+    fun `le premier episode de la saison 2 lu sur Jellyfin se coche et reste coche apres le miroir serveur`() = runTest {
         val stack = stack(arcane, seasonOne)
         val repository = JellyfinRepositoryImpl(serverWithSecondSeasonStarted(), FakeJellyfinSessionStore(session), stack.mediaRepository, stack.episodeRepository)
 
@@ -71,11 +75,11 @@ class JellyfinPullEndToEndTest {
 
         val expected = seasonOne + EpisodeKey(2, 1)
         assertEquals(expected, stack.episodeRepository.observeWatchedEpisodes("arcane").first())
-        assertEquals(expected, stack.firestore.remoteEpisodes.value["arcane"])
+        assertEquals(expected, stack.server.episodes.value["arcane"])
         val media = stack.mediaRepository.observeMediaById("arcane").first()
         assertEquals(WatchStatus.EN_COURS, media?.status)
         assertEquals(null, media?.watchedAt)
-        assertEquals(WatchStatus.EN_COURS, stack.firestore.remoteMedia.value.single().status)
+        assertEquals(WatchStatus.EN_COURS, stack.server.media.value.single().status)
     }
 
     @Test
@@ -94,7 +98,7 @@ class JellyfinPullEndToEndTest {
         assertEquals("jf-arcane", media?.jellyfinId)
         assertEquals(WatchStatus.EN_COURS, media?.status)
         assertEquals(seasonOne + EpisodeKey(2, 1), stack.episodeRepository.observeWatchedEpisodes("arcane").first())
-        assertEquals(seasonOne + EpisodeKey(2, 1), stack.firestore.remoteEpisodes.value["arcane"])
-        assertEquals("jf-arcane", stack.firestore.remoteMedia.value.single().jellyfinId)
+        assertEquals(seasonOne + EpisodeKey(2, 1), stack.server.episodes.value["arcane"])
+        assertEquals("jf-arcane", stack.server.media.value.single().jellyfinId)
     }
 }

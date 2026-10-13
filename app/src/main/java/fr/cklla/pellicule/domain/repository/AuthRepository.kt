@@ -1,6 +1,7 @@
 package fr.cklla.pellicule.domain.repository
 
 import android.content.Context
+import fr.cklla.pellicule.domain.model.AuthState
 import fr.cklla.pellicule.domain.model.AuthUser
 import fr.cklla.pellicule.domain.model.Resource
 import kotlinx.coroutines.flow.SharedFlow
@@ -16,7 +17,13 @@ import kotlinx.coroutines.flow.StateFlow
  */
 interface AuthRepository {
 
-    /** Utilisateur actuellement connecté, ou `null` si personne n'est connecté. */
+    /** État de connexion, dont l'instant où la session enregistrée n'est pas encore chargée. */
+    val authState: StateFlow<AuthState>
+
+    /**
+     * Utilisateur actuellement connecté, ou `null` si personne ne l'est (ou pas encore, pendant le
+     * chargement de la session : voir [authState] pour les distinguer).
+     */
     val currentUser: StateFlow<AuthUser?>
 
     /**

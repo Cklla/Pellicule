@@ -7,6 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -26,6 +29,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import fr.cklla.pellicule.domain.model.AuthState
 import fr.cklla.pellicule.notification.NotificationDestination
 import fr.cklla.pellicule.ui.AppTab
 import androidx.navigation.NavType
@@ -94,8 +98,10 @@ class MainActivity : ComponentActivity() {
 //
 // Connexion Google obligatoire au lancement : tant que personne n'est connecté, on affiche
 // `LoginScreen` à la place du `NavHost` — pas une destination de plus dans le graphe de
-// navigation, un vrai "portail" en dehors de la pile. Dès que `AuthRepository.currentUser` devient
-// non-null (connexion réussie), la recomposition bascule automatiquement sur le NavHost normal,
+// navigation, un vrai "portail" en dehors de la pile. Le temps que la session enregistrée se
+// charge, rien n'est affiché : ni écran de connexion (l'utilisateur est peut-être déjà connecté),
+// ni application. Dès que `AuthRepository.authState` devient `SignedIn` (connexion réussie), la
+// recomposition bascule automatiquement sur le NavHost normal,
 // qui démarre toujours sur la Bibliothèque. Jellyfin reste indépendant de ce compte Google : sa
 // connexion propre se fait séparément depuis l'onglet Compte.
 @Composable
@@ -104,10 +110,17 @@ fun PelliculeApp(
     pendingDestination: NotificationDestination? = null,
     onPendingDestinationConsumed: () -> Unit = {},
 ) {
-    val currentUser by authGateViewModel.currentUser.collectAsStateWithLifecycle()
-    if (currentUser == null) {
-        LoginScreen()
-        return
+    val authState by authGateViewModel.authState.collectAsStateWithLifecycle()
+    when (authState) {
+        AuthState.Initializing -> {
+            Box(Modifier.fillMaxSize().background(BackgroundDark))
+            return
+        }
+        AuthState.SignedOut -> {
+            LoginScreen()
+            return
+        }
+        is AuthState.SignedIn -> Unit
     }
 
     // Une seule fois après la connexion, jamais à un moment arbitraire : le contrôle quotidien du

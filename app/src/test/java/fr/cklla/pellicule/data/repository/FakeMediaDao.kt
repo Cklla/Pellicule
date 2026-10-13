@@ -44,6 +44,8 @@ class FakeMediaDao : MediaDao {
         media.update { list -> list.filterNot { it.id == id } }
     }
 
+    override suspend fun getAllOnce(): List<MediaEntity> = media.value
+
     override suspend fun getAllIds(): List<String> = media.value.map { it.id }
 
     override suspend fun getByIdOnce(id: String): MediaEntity? = media.value.find { it.id == id }

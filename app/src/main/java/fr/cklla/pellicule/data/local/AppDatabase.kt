@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import fr.cklla.pellicule.data.local.entity.EpisodeReminderEntity
 import fr.cklla.pellicule.data.local.entity.MediaEntity
+import fr.cklla.pellicule.data.local.entity.PendingOperationEntity
 import fr.cklla.pellicule.data.local.entity.TvEpisodeCacheEntity
 import fr.cklla.pellicule.data.local.entity.TvSeasonCacheEntity
 import fr.cklla.pellicule.data.local.entity.TvShowCacheEntity
@@ -17,8 +18,9 @@ import fr.cklla.pellicule.data.local.entity.WatchedEpisodeEntity
         TvSeasonCacheEntity::class,
         TvEpisodeCacheEntity::class,
         EpisodeReminderEntity::class,
+        PendingOperationEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,4 +28,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun episodeDao(): EpisodeDao
     abstract fun tvShowCacheDao(): TvShowCacheDao
     abstract fun episodeReminderDao(): EpisodeReminderDao
+    abstract fun outboxDao(): OutboxDao
 }

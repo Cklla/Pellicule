@@ -7,9 +7,9 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Point d'accès unique aux données suivies pour les ViewModels.
  *
- * Le ViewModel ne connaît que cette interface : il ignore si les contenus viennent de Room, de
- * Firestore ou d'un cache mémoire. L'implémentation (voir `data.repository.MediaRepositoryImpl`)
- * orchestre Room seul pour l'instant ; la synchro Firestore viendra s'y ajouter.
+ * Le ViewModel ne connaît que cette interface : il ignore si les contenus viennent de Room, du
+ * serveur ou d'un cache mémoire. L'implémentation (voir `data.repository.MediaRepositoryImpl`) lit
+ * Room et y recopie l'état du serveur, auquel les écritures sont envoyées par une file d'attente.
  */
 interface MediaRepository {
 

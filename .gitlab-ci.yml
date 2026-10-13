@@ -2,12 +2,15 @@
 # CI Pellicule — les jobs proviennent du socle partage Cklla/ci-templates.
 #
 # Ce fichier ne contient QUE ce qui est propre a Pellicule : le stage, la
-# reference au socle, et la preparation Firebase. Toute correction apportee
+# reference au socle. Toute correction apportee
 # aux jobs eux-memes se fait dans ci-templates puis se recupere ici en
 # changeant `ref`.
 #
 # Prerequis cote GitLab (Settings > CI/CD > Variables) :
-#   GOOGLE_SERVICES_JSON  fichier, le google-services.json du projet Firebase
+#   SUPABASE_DB_URL       variable masquee, chaine de connexion Postgres du projet
+#                         Supabase (Connect > Session pooler), mot de passe inclus
+# Et un planning (Build > Pipeline schedules) quotidien ou hebdomadaire pour
+# declencher la sauvegarde.
 # La variable NVD_API_KEY n'est plus utilisee : le scan de vulnerabilites ne
 # s'appuie plus sur la base NVD.
 # =============================================================================
@@ -25,26 +28,48 @@ include:
 
 stages:
   - test
+  - sauvegarde
 
 # -----------------------------------------------------------------------------
 # Surcharges propres au projet.
 #
-# Les plugins Firebase (google-services) lisent google-services.json des la
-# phase de CONFIGURATION Gradle : sans ce fichier, meme une simple resolution
-# de dependances echoue. Les deux jobs qui invoquent Gradle en ont donc besoin.
-#
-# Attention : en GitLab CI une surcharge REMPLACE la cle, elle ne s'y ajoute
-# pas. Les templates laissent `before_script` vide a dessein pour que ces
-# blocs ne fassent rien perdre.
-#
-# La cle TMDB n'est PAS necessaire ici : app/build.gradle.kts la lit dans
+# La cle TMDB, l'URL Supabase, la cle publishable et l'identifiant client Web
+# Google ne sont PAS necessaires ici : app/build.gradle.kts les lit dans
 # local.properties avec une valeur par defaut vide, la compilation et les
 # tests unitaires n'en dependent pas.
 # -----------------------------------------------------------------------------
-unit_tests:
-  before_script:
-    - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
 
-dependency_inventory:
-  before_script:
-    - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
+# Tests du script d'export Firestore -> Supabase (module pur, sans reseau ni Firebase).
+test_scripts_migration:
+  stage: test
+  image: python:3.12-slim
+  tags:
+    - linux-docker
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+  script:
+    - cd scripts/migration && python3 -m unittest -q
+
+# -----------------------------------------------------------------------------
+# Sauvegarde des donnees Supabase (l'offre gratuite n'en fait pas).
+#
+# Uniquement sur planning. Export des donnees du schema public en SQL, conserve
+# en artefact 30 jours : il contient les donnees de suivi des comptes, il ne doit
+# donc pas sortir du projet GitLab. La connexion quotidienne sert aussi
+# a eviter la mise en pause d'un projet gratuit inactif.
+# -----------------------------------------------------------------------------
+sauvegarde_supabase:
+  stage: sauvegarde
+  image: postgres:17
+  tags:
+    - linux-docker
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - pg_dump "$SUPABASE_DB_URL" --data-only --schema=public --no-owner --file=sauvegarde.sql
+    - test -s sauvegarde.sql
+  artifacts:
+    name: "supabase-$CI_PIPELINE_ID"
+    paths:
+      - sauvegarde.sql
+    expire_in: 30 days
