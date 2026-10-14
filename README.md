@@ -100,8 +100,9 @@ le fournisseur Google activé. Un serveur [Jellyfin](https://jellyfin.org/) est 
 ## Sauvegarde et restauration
 
 Le plan gratuit de Supabase n'a pas de sauvegarde automatique. Le job GitLab `sauvegarde_supabase`
-(`.gitlab-ci.yml`, planning quotidien, variable `SUPABASE_DB_URL`) exporte les données du schéma
-`public` dans l'artefact `sauvegarde.sql`, conservé 30 jours ; il maintient aussi le projet actif.
+(`.gitlab-ci.yml`, planning quotidien, variable `SUPABASE_DB_URL`) exporte les données des schémas
+`public` et `cartouche` (le projet est partagé avec Cartouche, qui garde son schéma et ses migrations dans son
+propre dépôt) dans l'artefact `sauvegarde.sql`, conservé 30 jours ; il maintient aussi le projet actif.
 Le dump ne contient pas les comptes (`auth.users`) : la procédure de restauration, y compris le
 remappage des identifiants de compte vers un nouveau projet, est dans
 [supabase/RESTAURATION.md](supabase/RESTAURATION.md). Les tests d'isolation entre comptes et de
