@@ -92,6 +92,60 @@ class EpisodeRepositoryImplTest {
     }
 
     @Test
+    fun `markEpisodesWatched coche tous les episodes et les envoie en un seul lot`() = runTest {
+        val server = serverWithSerie()
+        val repository = fakeEpisodeRepository(remote = server)
+        val season = (1..3).map { EpisodeKey(2, it) }.toSet()
+
+        val result = repository.markEpisodesWatched("media-1", season)
+
+        assertTrue(result is Resource.Success)
+        assertEquals(season, repository.observeWatchedEpisodes("media-1").first())
+        assertEquals(listOf("media-1" to season), server.addedEpisodes)
+        assertTrue(server.removedEpisodes.isEmpty())
+    }
+
+    @Test
+    fun `markEpisodesWatched n'envoie pas les episodes deja vus`() = runTest {
+        val server = serverWithSerie()
+        val repository = fakeEpisodeRepository(remote = server)
+        repository.setEpisodeWatched("media-1", EpisodeKey(1, 1), watched = true)
+        server.addedEpisodes.clear()
+
+        repository.markEpisodesWatched("media-1", setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)), repository.observeWatchedEpisodes("media-1").first())
+        assertEquals(listOf("media-1" to setOf(EpisodeKey(1, 2))), server.addedEpisodes)
+    }
+
+    @Test
+    fun `markEpisodesWatched sur une saison deja vue n'envoie rien`() = runTest {
+        val server = serverWithSerie()
+        val outbox = FakeOutboxDao()
+        val repository = fakeEpisodeRepository(remote = server, outboxDao = outbox)
+        repository.setEpisodeWatched("media-1", EpisodeKey(1, 1), watched = true)
+        server.addedEpisodes.clear()
+
+        repository.markEpisodesWatched("media-1", setOf(EpisodeKey(1, 1)))
+
+        assertTrue(server.addedEpisodes.isEmpty())
+        assertTrue(outbox.pending.isEmpty())
+    }
+
+    @Test
+    fun `markEpisodesWatched hors ligne garde la saison en file`() = runTest {
+        val server = serverWithSerie().apply { offline = true }
+        val outbox = FakeOutboxDao()
+        val repository = fakeEpisodeRepository(remote = server, outboxDao = outbox)
+
+        val result = repository.markEpisodesWatched("media-1", setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+
+        assertTrue(result is Resource.Success)
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)), repository.observeWatchedEpisodes("media-1").first())
+        assertEquals(listOf(PendingOperationKind.ADD_EPISODES.name), outbox.pending.map { it.kind })
+    }
+
+    @Test
     fun `replaceWatchedEpisodes ne met en file que la difference`() = runTest {
         val server = serverWithSerie()
         val repository = fakeEpisodeRepository(remote = server)

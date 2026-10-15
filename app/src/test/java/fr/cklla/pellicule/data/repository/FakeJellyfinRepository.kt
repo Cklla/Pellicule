@@ -20,6 +20,7 @@ class FakeJellyfinRepository : JellyfinRepository {
     val syncedItems = mutableListOf<List<Media>>()
     val syncedMovies = mutableListOf<List<Media>>()
     val pushedEpisodes = mutableListOf<Triple<Media, EpisodeKey, Boolean>>()
+    val pushedEpisodeBatches = mutableListOf<Pair<Media, Set<EpisodeKey>>>()
     val pushedMovies = mutableListOf<Pair<Media, Boolean>>()
     val unwatchedSeries = mutableListOf<Media>()
     var pushWatchedHistoryResult = JellyfinPushHistoryResult(moviesMarkedPlayed = 0, episodesMarkedPlayed = 0)
@@ -51,6 +52,11 @@ class FakeJellyfinRepository : JellyfinRepository {
     override suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean) {
         if (_session.value == null) return
         pushedEpisodes.add(Triple(media, EpisodeKey(seasonNumber, episodeNumber), watched))
+    }
+
+    override suspend fun pushEpisodesWatched(media: Media, episodes: Set<EpisodeKey>) {
+        if (_session.value == null) return
+        pushedEpisodeBatches.add(media to episodes)
     }
 
     override suspend fun pushMovieWatched(media: Media, watched: Boolean) {

@@ -28,13 +28,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -125,6 +129,7 @@ fun DetailScreen(
         onRatingSelected = viewModel::onRatingSelected,
         onSeasonSelected = viewModel::onSeasonSelected,
         onEpisodeWatchedToggled = viewModel::onEpisodeWatchedToggled,
+        onSeasonMarkedWatched = viewModel::onSeasonMarkedWatched,
         onReminderToggled = viewModel::onReminderToggled,
         onRemoveMedia = viewModel::onRemoveMedia,
         onAddMedia = viewModel::onAddMedia,
@@ -154,6 +159,7 @@ private fun DetailContent(
     onRatingSelected: (Int?) -> Unit,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeWatchedToggled: (EpisodeUiModel) -> Unit,
+    onSeasonMarkedWatched: () -> Unit,
     onReminderToggled: (Boolean) -> Unit,
     onRemoveMedia: () -> Unit,
     onAddMedia: () -> Unit,
@@ -171,7 +177,14 @@ private fun DetailContent(
             .fillMaxSize()
             .background(BackgroundDark),
     ) {
-        BackHeader(onBackClick = onBackClick)
+        BackHeader(
+            onBackClick = onBackClick,
+            // Le menu n'agit que sur la saison affichée : il n'existe que pour un contenu suivi
+            // dont la liste d'épisodes est chargée.
+            showSeasonMenu = isInBacklog && media.type != MediaType.FILM && episodes.isNotEmpty(),
+            seasonFullyWatched = episodes.all { it.watched },
+            onSeasonMarkedWatched = onSeasonMarkedWatched,
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -280,29 +293,81 @@ private fun DetailContent(
 }
 
 @Composable
-private fun BackHeader(onBackClick: () -> Unit) {
+private fun BackHeader(
+    onBackClick: () -> Unit,
+    showSeasonMenu: Boolean,
+    seasonFullyWatched: Boolean,
+    onSeasonMarkedWatched: () -> Unit,
+) {
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .clickable(onClick = onBackClick)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .heightIn(min = 48.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = null,
-                tint = TextPrimary,
-            )
-            Text(
-                text = stringResource(R.string.detail_back),
-                style = PelliculeTextStyles.backLabel,
-                color = TextTertiary,
-            )
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .clickable(onClick = onBackClick)
+                    .padding(start = 20.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = null,
+                    tint = TextPrimary,
+                )
+                Text(
+                    text = stringResource(R.string.detail_back),
+                    style = PelliculeTextStyles.backLabel,
+                    color = TextTertiary,
+                )
+            }
+            if (showSeasonMenu) {
+                SeasonMenu(
+                    seasonFullyWatched = seasonFullyWatched,
+                    onSeasonMarkedWatched = onSeasonMarkedWatched,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+            }
         }
         HorizontalDivider(color = BorderHairline.copy(alpha = 0.6f), thickness = 0.5.dp)
+    }
+}
+
+@Composable
+private fun SeasonMenu(
+    seasonFullyWatched: Boolean,
+    onSeasonMarkedWatched: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                imageVector = Icons.Filled.MoreVert,
+                contentDescription = stringResource(R.string.detail_more_options),
+                tint = TextPrimary,
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = SurfaceCard,
+        ) {
+            DropdownMenuItem(
+                text = { Text(text = stringResource(R.string.detail_mark_season_watched), color = TextPrimary) },
+                // Rien à cocher quand toute la saison l'est déjà.
+                enabled = !seasonFullyWatched,
+                onClick = {
+                    expanded = false
+                    onSeasonMarkedWatched()
+                },
+            )
+        }
     }
 }
 
@@ -858,6 +923,7 @@ private fun DetailContentPreview() {
             onRatingSelected = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
+            onSeasonMarkedWatched = {},
             onReminderToggled = {},
             onRemoveMedia = {},
             onAddMedia = {},
@@ -891,6 +957,7 @@ private fun DetailContentApercuPreview() {
             onRatingSelected = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
+            onSeasonMarkedWatched = {},
             onReminderToggled = {},
             onRemoveMedia = {},
             onAddMedia = {},

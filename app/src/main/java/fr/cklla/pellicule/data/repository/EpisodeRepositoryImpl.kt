@@ -56,6 +56,22 @@ class EpisodeRepositoryImpl @Inject constructor(
             onFailure = { Resource.Error("Impossible de mettre à jour le statut de l'épisode.", it) },
         )
 
+    override suspend fun markEpisodesWatched(mediaId: String, episodes: Set<EpisodeKey>): Resource<Unit> =
+        runCatching {
+            transactions.run {
+                val alreadyWatched = episodeDao.getWatchedOnce(mediaId)
+                    .map { EpisodeKey(it.seasonNumber, it.episodeNumber) }
+                    .toSet()
+                val added = episodes - alreadyWatched
+                episodeDao.insertAll(added.map { WatchedEpisodeEntity(mediaId, it.seasonNumber, it.episodeNumber) })
+                outboxDao.enqueueEpisodes(PendingOperationKind.ADD_EPISODES, mediaId, added)
+            }
+            outboxScheduler.requestFlush()
+        }.fold(
+            onSuccess = { Resource.Success(Unit) },
+            onFailure = { Resource.Error("Impossible de marquer les épisodes comme vus.", it) },
+        )
+
     // Seule la différence est mise en file : une synchro Jellyfin qui ne change rien n'envoie rien.
     override suspend fun replaceWatchedEpisodes(mediaId: String, watched: Set<EpisodeKey>): Resource<Unit> =
         runCatching {

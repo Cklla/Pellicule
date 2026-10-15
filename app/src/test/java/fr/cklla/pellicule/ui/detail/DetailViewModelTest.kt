@@ -328,6 +328,91 @@ class DetailViewModelTest {
     }
 
     @Test
+    fun `marquer la saison vue coche tous les episodes de la saison affichee`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val addResult = repository.addMedia(
+            Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.A_VOIR, tmdbId = 95396),
+        )
+        val mediaId = (addResult as Resource.Success).data
+        val tvDetailsRepository = FakeTvDetailsRepository().apply {
+            seasonsResponse = Resource.Success(listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 3, posterUrl = null)))
+            defaultEpisodesResponse = Resource.Success(
+                (1..3).map { EpisodeInfo(seasonNumber = 1, episodeNumber = it, title = "Épisode $it", stillUrl = null) },
+            )
+        }
+        val jellyfinRepository = FakeJellyfinRepository().apply {
+            setSession(JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token"))
+        }
+
+        val viewModel = viewModelFor(mediaId, repository, tvDetailsRepository, jellyfinRepository = jellyfinRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onSeasonMarkedWatched()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.episodes.all { it.watched })
+        assertEquals(WatchStatus.EN_COURS, state.media?.status)
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2), EpisodeKey(1, 3)), jellyfinRepository.pushedEpisodeBatches.single().second)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `marquer la saison vue n'envoie que les episodes pas encore vus`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val addResult = repository.addMedia(
+            Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.EN_COURS, tmdbId = 95396),
+        )
+        val mediaId = (addResult as Resource.Success).data
+        val tvDetailsRepository = FakeTvDetailsRepository().apply {
+            seasonsResponse = Resource.Success(listOf(Season(seasonNumber = 1, name = "Saison 1", episodeCount = 3, posterUrl = null)))
+            defaultEpisodesResponse = Resource.Success(
+                (1..3).map { EpisodeInfo(seasonNumber = 1, episodeNumber = it, title = "Épisode $it", stillUrl = null) },
+            )
+        }
+        val jellyfinRepository = FakeJellyfinRepository().apply {
+            setSession(JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token"))
+        }
+
+        val viewModel = viewModelFor(mediaId, repository, tvDetailsRepository, jellyfinRepository = jellyfinRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onEpisodeWatchedToggled(viewModel.uiState.value.episodes.first())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onSeasonMarkedWatched()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.episodes.all { it.watched })
+        assertEquals(setOf(EpisodeKey(1, 2), EpisodeKey(1, 3)), jellyfinRepository.pushedEpisodeBatches.single().second)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `marquer la saison vue sans episodes charges ne fait rien`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val addResult = repository.addMedia(
+            Media(title = "Severance", type = MediaType.SERIE, status = WatchStatus.A_VOIR, tmdbId = 95396),
+        )
+        val mediaId = (addResult as Resource.Success).data
+        val jellyfinRepository = FakeJellyfinRepository().apply {
+            setSession(JellyfinSession(serverUrl = "https://jellyfin.exemple.fr", userId = "user-1", username = "stef", accessToken = "token"))
+        }
+
+        val viewModel = viewModelFor(mediaId, repository, FakeTvDetailsRepository(), jellyfinRepository = jellyfinRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onSeasonMarkedWatched()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(jellyfinRepository.pushedEpisodeBatches.isEmpty())
+        assertEquals(WatchStatus.A_VOIR, viewModel.uiState.value.media?.status)
+        collectorJob.cancel()
+    }
+
+    @Test
     fun `changer de saison recharge les episodes de la saison choisie`() = runTest {
         val repository = fakeMediaRepository(FakeMediaDao())
         val addResult = repository.addMedia(

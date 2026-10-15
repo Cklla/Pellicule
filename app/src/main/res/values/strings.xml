@@ -44,6 +44,8 @@
 
     <!-- Écran Détail -->
     <string name="detail_back">Retour à la bibliothèque</string>
+    <string name="detail_more_options">Plus d\'options</string>
+    <string name="detail_mark_season_watched">Marquer toute la saison sélectionnée comme vu</string>
     <string name="detail_synopsis_label">Synopsis</string>
     <string name="detail_availability_label">Disponibilité</string>
     <string name="detail_availability_streaming">Disponible en streaming sur :</string>

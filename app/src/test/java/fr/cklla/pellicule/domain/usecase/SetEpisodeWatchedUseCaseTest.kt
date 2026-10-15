@@ -208,4 +208,103 @@ class SetEpisodeWatchedUseCaseTest {
     fun `un contenu inconnu est ignore`() = runTest {
         assertNull(useCase("absent", EpisodeKey(1, 1), watched = true))
     }
+
+    @Test
+    fun `cocher une saison marque tous ses episodes vus`() = runTest {
+        val id = addSeries(WatchStatus.A_VOIR)
+        val season = setOf(EpisodeKey(1, 1), EpisodeKey(1, 2), EpisodeKey(1, 3))
+
+        useCase.markAllWatched(id, season)
+
+        assertEquals(season, watched(id))
+    }
+
+    @Test
+    fun `cocher une saison passe un contenu A voir a En cours`() = runTest {
+        val id = addSeries(WatchStatus.A_VOIR)
+
+        val result = useCase.markAllWatched(id, setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+
+        assertEquals(WatchStatus.EN_COURS, result?.status)
+        assertEquals(WatchStatus.EN_COURS, stored(id).status)
+    }
+
+    @Test
+    fun `cocher la derniere saison d'une serie terminee passe a Vu et pose watchedAt`() = runTest {
+        tvShowRepository.put(show(TvShowStatus.TERMINEE, counts = mapOf(1 to 2, 2 to 2)))
+        val id = addSeries(WatchStatus.EN_COURS)
+        useCase.markAllWatched(id, setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+        assertEquals(WatchStatus.EN_COURS, stored(id).status)
+
+        val result = useCase.markAllWatched(id, setOf(EpisodeKey(2, 1), EpisodeKey(2, 2)))
+
+        assertEquals(WatchStatus.VU, result?.status)
+        assertNotNull(stored(id).watchedAt)
+    }
+
+    @Test
+    fun `cocher une saison d'une serie encore diffusee reste En cours`() = runTest {
+        tvShowRepository.put(show(TvShowStatus.EN_DIFFUSION))
+        val id = addSeries(WatchStatus.A_VOIR)
+
+        val result = useCase.markAllWatched(id, setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+
+        assertEquals(WatchStatus.EN_COURS, result?.status)
+    }
+
+    @Test
+    fun `la saison est poussee vers Jellyfin en un seul lot avec le statut a jour`() = runTest {
+        connectJellyfin()
+        val id = addSeries(WatchStatus.A_VOIR)
+        val season = setOf(EpisodeKey(1, 1), EpisodeKey(1, 2))
+
+        useCase.markAllWatched(id, season)
+
+        assertEquals(1, jellyfinRepository.pushedEpisodeBatches.size)
+        val (media, episodes) = jellyfinRepository.pushedEpisodeBatches.single()
+        assertEquals(season, episodes)
+        assertEquals(WatchStatus.EN_COURS, media.status)
+        assertTrue("aucun envoi episode par episode", jellyfinRepository.pushedEpisodes.isEmpty())
+    }
+
+    @Test
+    fun `cocher une saison notifie la partie locale avant la poussee Jellyfin`() = runTest {
+        connectJellyfin()
+        val id = addSeries(WatchStatus.A_VOIR)
+        var pushedWhenNotified = -1
+
+        useCase.markAllWatched(id, setOf(EpisodeKey(1, 1))) {
+            pushedWhenNotified = jellyfinRepository.pushedEpisodeBatches.size
+        }
+
+        assertEquals(0, pushedWhenNotified)
+        assertEquals(1, jellyfinRepository.pushedEpisodeBatches.size)
+    }
+
+    @Test
+    fun `cocher une saison sans session Jellyfin aboutit en local`() = runTest {
+        val id = addSeries(WatchStatus.A_VOIR)
+
+        useCase.markAllWatched(id, setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)))
+
+        assertTrue(jellyfinRepository.pushedEpisodeBatches.isEmpty())
+        assertEquals(setOf(EpisodeKey(1, 1), EpisodeKey(1, 2)), watched(id))
+    }
+
+    @Test
+    fun `cocher une saison vide ne fait rien`() = runTest {
+        val id = addSeries(WatchStatus.A_VOIR)
+
+        assertNull(useCase.markAllWatched(id, emptySet()))
+        assertEquals(WatchStatus.A_VOIR, stored(id).status)
+    }
+
+    @Test
+    fun `cocher une saison d'un film ou d'un contenu inconnu est ignore`() = runTest {
+        val film = addSeries(type = MediaType.FILM)
+
+        assertNull(useCase.markAllWatched(film, setOf(EpisodeKey(1, 1))))
+        assertTrue(watched(film).isEmpty())
+        assertNull(useCase.markAllWatched("absent", setOf(EpisodeKey(1, 1))))
+    }
 }

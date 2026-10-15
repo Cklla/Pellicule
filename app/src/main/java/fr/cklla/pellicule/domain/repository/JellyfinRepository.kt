@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.domain.repository
 
+import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.JellyfinPushHistoryResult
 import fr.cklla.pellicule.domain.model.JellyfinSession
 import fr.cklla.pellicule.domain.model.Media
@@ -56,6 +57,14 @@ interface JellyfinRepository {
      * prochain [syncTrackedSeries] rattrapera l'écart).
      */
     suspend fun pushEpisodeWatched(media: Media, seasonNumber: Int, episodeNumber: Int, watched: Boolean)
+
+    /**
+     * Marque vus côté Jellyfin plusieurs épisodes d'une même série d'un coup (une saison cochée en
+     * bloc) : la liste des épisodes du serveur n'est lue qu'une fois, là où [pushEpisodeWatched]
+     * la relit à chaque appel. Même comportement best-effort : rien sans session active, un échec
+     * réseau est ignoré.
+     */
+    suspend fun pushEpisodesWatched(media: Media, episodes: Set<EpisodeKey>)
 
     /**
      * Pousse le statut de lecture d'un FILM vers Jellyfin, juste après une action locale (même
