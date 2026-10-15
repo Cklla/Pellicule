@@ -57,10 +57,35 @@ class SetEpisodeWatchedUseCase @Inject constructor(
         return media
     }
 
-    private suspend fun applyLocally(mediaId: String, episode: EpisodeKey, watched: Boolean): Media? {
+    /**
+     * Marque vus tous les [episodes] d'un coup (une saison entière) : une seule écriture locale, un
+     * seul recalcul du statut global, puis un envoi groupé vers Jellyfin. Mêmes garanties que
+     * [invoke] (partie locale hors annulation, `onLocalChange` avant le réseau).
+     *
+     * @return le contenu à jour, ou `null` si le contenu n'existe plus, n'a pas d'épisodes (film) ou
+     *   si [episodes] est vide.
+     */
+    suspend fun markAllWatched(
+        mediaId: String,
+        episodes: Set<EpisodeKey>,
+        onLocalChange: (Media) -> Unit = {},
+    ): Media? {
+        if (episodes.isEmpty()) return null
+        val media = withContext(NonCancellable) {
+            applyLocally(mediaId, watched = true) { episodeRepository.markEpisodesWatched(mediaId, episodes) }
+        } ?: return null
+        onLocalChange(media)
+        jellyfinRepository.pushEpisodesWatched(media, episodes)
+        return media
+    }
+
+    private suspend fun applyLocally(mediaId: String, episode: EpisodeKey, watched: Boolean): Media? =
+        applyLocally(mediaId, watched) { episodeRepository.setEpisodeWatched(mediaId, episode, watched) }
+
+    private suspend fun applyLocally(mediaId: String, watched: Boolean, write: suspend () -> Resource<Unit>): Media? {
         val media = mediaRepository.observeMediaById(mediaId).first() ?: return null
         if (media.type == MediaType.FILM) return null
-        if (episodeRepository.setEpisodeWatched(mediaId, episode, watched) is Resource.Error) return null
+        if (write() is Resource.Error) return null
 
         val watchedEpisodes = episodeRepository.observeWatchedEpisodes(mediaId).first()
         val show = media.tmdbId?.let { tvShowInfoRepository.getCachedShow(it) }

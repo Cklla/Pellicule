@@ -189,6 +189,33 @@ class JellyfinRepositoryImpl @Inject constructor(
         }.onFailure { handleFailure("envoi de l'épisode vers Jellyfin", it) }
     }
 
+    override suspend fun pushEpisodesWatched(media: Media, episodes: Set<EpisodeKey>) {
+        val current = session.value ?: return
+        if (episodes.isEmpty()) return
+        runCatching {
+            val serverEpisodes = withJellyfinSeriesId(current, media) { jellyfinId ->
+                jellyfinApi.getSeriesEpisodes(
+                    url = JellyfinApi.seriesEpisodesUrl(current.serverUrl, jellyfinId),
+                    authHeader = authHeader(current.accessToken),
+                    userId = current.userId,
+                ).items
+            } ?: return
+
+            serverEpisodes
+                .filter { item ->
+                    val season = item.seasonNumber ?: return@filter false
+                    val number = item.episodeNumber ?: return@filter false
+                    EpisodeKey(season, number) in episodes && item.userData?.played != true
+                }
+                .forEach { item ->
+                    jellyfinApi.markPlayed(
+                        url = JellyfinApi.playedItemUrl(current.serverUrl, current.userId, item.id),
+                        authHeader = authHeader(current.accessToken),
+                    )
+                }
+        }.onFailure { handleFailure("envoi des épisodes vers Jellyfin", it) }
+    }
+
     override suspend fun pushMovieWatched(media: Media, watched: Boolean) {
         val current = session.value ?: return
         runCatching {

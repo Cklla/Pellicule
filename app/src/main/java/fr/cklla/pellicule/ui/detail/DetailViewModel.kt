@@ -342,16 +342,28 @@ class DetailViewModel @Inject constructor(
         val media = workingMedia.value?.takeIf { it.id.isNotEmpty() } ?: return
         val watched = !episode.watched
         viewModelScope.launch {
-            setEpisodeWatched(media.id, EpisodeKey(episode.seasonNumber, episode.episodeNumber), watched) { updated ->
-                // Cocher un épisode peut changer le statut global (et `watchedAt`) : la copie de
-                // travail doit les reprendre, sinon la prochaine édition (note, statut) les
-                // réécrirait avec leurs anciennes valeurs.
-                workingMedia.update { current ->
-                    current?.takeIf { it.id == updated.id }
-                        ?.copy(status = updated.status, watchedAt = updated.watchedAt, jellyfinId = updated.jellyfinId ?: current.jellyfinId)
-                        ?: current
-                }
-            }
+            setEpisodeWatched(media.id, EpisodeKey(episode.seasonNumber, episode.episodeNumber), watched, ::adoptLocalChange)
+        }
+    }
+
+    /** Marque vus tous les épisodes de la saison actuellement affichée. */
+    fun onSeasonMarkedWatched() {
+        val media = workingMedia.value?.takeIf { it.id.isNotEmpty() } ?: return
+        val unwatched = uiState.value.episodes.filterNot { it.watched }
+            .map { EpisodeKey(it.seasonNumber, it.episodeNumber) }
+            .toSet()
+        if (unwatched.isEmpty()) return
+        viewModelScope.launch { setEpisodeWatched.markAllWatched(media.id, unwatched, ::adoptLocalChange) }
+    }
+
+    // Cocher un épisode peut changer le statut global (et `watchedAt`) : la copie de travail doit
+    // les reprendre, sinon la prochaine édition (note, statut) les réécrirait avec leurs anciennes
+    // valeurs.
+    private fun adoptLocalChange(updated: Media) {
+        workingMedia.update { current ->
+            current?.takeIf { it.id == updated.id }
+                ?.copy(status = updated.status, watchedAt = updated.watchedAt, jellyfinId = updated.jellyfinId ?: current.jellyfinId)
+                ?: current
         }
     }
 

@@ -23,6 +23,12 @@ interface EpisodeRepository {
     suspend fun setEpisodeWatched(mediaId: String, episode: EpisodeKey, watched: Boolean): Resource<Unit>
 
     /**
+     * Marque vus [episodes] en une seule transaction (et un seul envoi groupé au serveur), pour une
+     * saison entière. Les épisodes déjà vus sont laissés tels quels et n'ajoutent rien à la file d'envoi.
+     */
+    suspend fun markEpisodesWatched(mediaId: String, episodes: Set<EpisodeKey>): Resource<Unit>
+
+    /**
      * Remplace l'intégralité du set d'épisodes vus d'un contenu suivi par [watched], en une seule
      * transaction. Utilisé par la synchro Jellyfin (voir `JellyfinRepository.syncTrackedSeries`),
      * qui fait foi côté lecture plutôt que de rejouer des toggles un par un.
