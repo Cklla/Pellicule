@@ -57,7 +57,6 @@ import fr.cklla.pellicule.ui.theme.AccentPurpleLight
 import fr.cklla.pellicule.ui.theme.AccentPurpleMuted
 import fr.cklla.pellicule.ui.theme.BorderHairline
 import fr.cklla.pellicule.ui.theme.PelliculeTextStyles
-import fr.cklla.pellicule.ui.theme.SuccessGreen
 import fr.cklla.pellicule.ui.theme.SurfaceCard
 import fr.cklla.pellicule.ui.theme.TextPrimary
 import fr.cklla.pellicule.ui.theme.TextSecondary
@@ -67,6 +66,9 @@ import java.util.Locale
 
 private const val POSTER_ASPECT_RATIO = 2f / 3f
 private const val MOSAIC_COLUMNS = 5
+
+/** Couleur du total de la slide d'ouverture. */
+private val TotalHeroColor = TextPrimary
 
 /** Contenu d'une slide du récap en images ; les valeurs viennent telles quelles de [RecapSlide], sans calcul. */
 @Composable
@@ -81,6 +83,7 @@ internal fun RecapSlideContent(slide: RecapSlide, year: Int, onMediaClick: (Stri
 
 @Composable
 private fun TotalSlide(slide: RecapSlide.Total) {
+    val clock = LocalRecapEntryClock.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -92,46 +95,39 @@ private fun TotalSlide(slide: RecapSlide.Total) {
             text = stringResource(R.string.recap_story_total_kicker),
             style = PelliculeTextStyles.kicker,
             color = AccentPurpleLight,
+            modifier = Modifier.recapEnter(clock, RecapMotion.TITLE_DELAY, RecapMotion.TITLE_DURATION),
         )
-        Text(text = slide.total.toString(), style = PelliculeTextStyles.recapHero, color = SuccessGreen)
+        CountUpText(
+            target = slide.total,
+            clock = clock,
+            style = PelliculeTextStyles.recapHero,
+            color = TotalHeroColor,
+            modifier = Modifier.recapEnter(clock, RecapMotion.KEY_FIGURE_DELAY, RecapMotion.KEY_FIGURE_DURATION),
+        )
         Text(
             text = pluralStringResource(R.plurals.recap_story_total_title, slide.total, slide.year),
             style = PelliculeTextStyles.detailTitle,
             color = TextPrimary,
             textAlign = TextAlign.Center,
+            modifier = Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
         )
-        Spacer(modifier = Modifier.height(36.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(10.dp)
-                .clip(RoundedCornerShape(5.dp)),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        Spacer(modifier = Modifier.height(32.dp))
+        TypeRing(countsByType = slide.countsByType, total = slide.total, clock = clock)
+        Spacer(modifier = Modifier.height(24.dp))
+        Column(
+            modifier = Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             MediaType.entries.forEach { type ->
                 val count = slide.countsByType[type] ?: 0
-                if (count > 0) {
-                    Box(
-                        modifier = Modifier
-                            .weight(count.toFloat())
-                            .fillMaxSize()
-                            .background(type.color()),
-                    )
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            MediaType.entries.forEach { type ->
-                val count = slide.countsByType[type] ?: 0
-                if (count > 0) TypeLegendRow(type = type, count = count)
+                if (count > 0) TypeLegendRow(type = type, count = count, clock = clock)
             }
         }
     }
 }
 
 @Composable
-private fun TypeLegendRow(type: MediaType, count: Int) {
+private fun TypeLegendRow(type: MediaType, count: Int, clock: RecapEntryClock) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -144,7 +140,13 @@ private fun TypeLegendRow(type: MediaType, count: Int) {
             color = TextSecondary,
             modifier = Modifier.weight(1f),
         )
-        Text(text = count.toString(), style = PelliculeTextStyles.legendCount, color = type.color())
+        CountUpText(
+            target = count,
+            clock = clock,
+            style = PelliculeTextStyles.legendCount,
+            color = type.color(),
+            contentAlignment = Alignment.CenterEnd,
+        )
     }
 }
 

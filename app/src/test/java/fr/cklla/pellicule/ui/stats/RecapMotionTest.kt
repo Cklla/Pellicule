@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.ui.stats
 
+import fr.cklla.pellicule.domain.model.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -62,5 +63,24 @@ class RecapMotionTest {
         assertTrue(isReducedMotion(0f))
         assertFalse(isReducedMotion(0.5f))
         assertFalse(isReducedMotion(1f))
+    }
+
+    private val film = DonutSegment(MediaType.FILM, startAngle = -90f, sweepAngle = 270f)
+    private val serie = DonutSegment(MediaType.SERIE, startAngle = 180f, sweepAngle = 90f)
+
+    @Test
+    fun `l'anneau est vide au depart et complet a la fin`() {
+        assertEquals(0f, revealedSweep(film, 0f), 0f)
+        assertEquals(270f, revealedSweep(film, 1f), 0f)
+        assertEquals(90f, revealedSweep(serie, 1f), 0f)
+    }
+
+    @Test
+    fun `le balayage revele les segments dans l'ordre`() {
+        // 180° balayés sur 360° : le premier segment est à demi dessiné, le suivant pas encore.
+        assertEquals(180f, revealedSweep(film, 0.5f), 0.001f)
+        assertEquals(0f, revealedSweep(serie, 0.5f), 0f)
+        // 0,875 × 360° = 315° : le second segment (270° à 360°) est entamé de 45°.
+        assertEquals(45f, revealedSweep(serie, 0.875f), 0.001f)
     }
 }
