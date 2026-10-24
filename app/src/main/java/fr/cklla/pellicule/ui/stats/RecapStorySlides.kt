@@ -358,18 +358,28 @@ private fun FactCard(
 
 @Composable
 private fun MosaicSlide(slide: RecapSlide.Mosaic, year: Int, onMediaClick: (String) -> Unit) {
+    val clock = LocalRecapEntryClock.current
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)) {
-            Text(text = stringResource(R.string.recap_story_mosaic_title), style = PelliculeTextStyles.detailTitle, color = TextPrimary)
+            Text(
+                text = stringResource(R.string.recap_story_mosaic_title),
+                style = PelliculeTextStyles.detailTitle,
+                color = TextPrimary,
+                modifier = Modifier.recapEnter(clock, RecapMotion.TITLE_DELAY, RecapMotion.TITLE_DURATION),
+            )
             Text(
                 text = pluralStringResource(R.plurals.recap_story_mosaic_subtitle, slide.media.size, slide.media.size, year),
                 style = PelliculeTextStyles.detailSubtitle,
                 color = TextTertiary,
+                modifier = Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
             )
         }
+        // La grille entre d'un bloc : animer chaque tuile coûterait cher avec une centaine d'affiches.
         LazyVerticalGrid(
             columns = GridCells.Fixed(MOSAIC_COLUMNS),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
