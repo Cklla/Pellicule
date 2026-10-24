@@ -56,6 +56,11 @@ internal object RecapMotion {
     const val HALO_DRIFT_DURATION = 600
     const val HALO_DRIFT_DELAY = 0
 
+    /** Intensité, position verticale (part de la hauteur) et rayon (part de la largeur) du halo. */
+    const val HALO_ALPHA = 0.28f
+    const val HALO_CENTER_Y = 0.6f
+    const val HALO_RADIUS = 0.9f
+
     /**
      * Durée de l'accrochage du pager sur la slide entrante. La parallaxe du fond suit la position du
      * pager, elle dure donc autant. La sortie de la slide précédente est menée par le même mouvement.

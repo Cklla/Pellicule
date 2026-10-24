@@ -83,4 +83,24 @@ class RecapMotionTest {
         // 0,875 × 360° = 315° : le second segment (270° à 360°) est entamé de 45°.
         assertEquals(45f, revealedSweep(serie, 0.875f), 0.001f)
     }
+
+    @Test
+    fun `une page est opaque en place et transparente une page plus loin`() {
+        assertEquals(1f, pageFadeAlpha(0f), 0f)
+        assertEquals(0.5f, pageFadeAlpha(0.5f), 0f)
+        assertEquals(0.5f, pageFadeAlpha(-0.5f), 0f)
+        assertEquals(0f, pageFadeAlpha(1f), 0f)
+        assertEquals(0f, pageFadeAlpha(-2f), 0f)
+    }
+
+    @Test
+    fun `le fond parcourt la part reduite du deplacement de la page`() {
+        val width = 1_000f
+        // Le pager déplace la page de -offset × largeur ; avec la compensation, le fond bouge de FACTOR × ce déplacement.
+        val pageShift = -0.5f * width
+        val backgroundShift = pageShift + parallaxCompensation(0.5f, width)
+
+        assertEquals(RecapMotion.PARALLAX_FACTOR * pageShift, backgroundShift, 0.001f)
+        assertEquals(0f, parallaxCompensation(0f, width), 0f)
+    }
 }
