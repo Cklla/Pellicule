@@ -20,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,24 +80,26 @@ private fun RecapStoryContent(
     onMediaClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(BackgroundDark),
-    ) {
-        when {
-            state.isLoading -> StoryTopBar(slideCount = 0, currentPage = 0, onCloseClick = onCloseClick)
-            state.slides.isEmpty() -> {
-                StoryTopBar(slideCount = 0, currentPage = 0, onCloseClick = onCloseClick)
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = stringResource(R.string.recap_story_empty, year),
-                        style = PelliculeTextStyles.emptyMessage,
-                        color = TextMuted,
-                    )
+    CompositionLocalProvider(LocalRecapReducedMotion provides rememberReducedMotion()) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(BackgroundDark),
+        ) {
+            when {
+                state.isLoading -> StoryTopBar(slideCount = 0, currentPage = 0, onCloseClick = onCloseClick)
+                state.slides.isEmpty() -> {
+                    StoryTopBar(slideCount = 0, currentPage = 0, onCloseClick = onCloseClick)
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = stringResource(R.string.recap_story_empty, year),
+                            style = PelliculeTextStyles.emptyMessage,
+                            color = TextMuted,
+                        )
+                    }
                 }
+                else -> StoryPager(year = year, slides = state.slides, onCloseClick = onCloseClick, onMediaClick = onMediaClick)
             }
-            else -> StoryPager(year = year, slides = state.slides, onCloseClick = onCloseClick, onMediaClick = onMediaClick)
         }
     }
 }
@@ -122,8 +125,10 @@ private fun ColumnScope.StoryPager(
         key = { index -> slides[index].key },
     ) { index ->
         val slide = slides[index]
-        Box(modifier = Modifier.fillMaxSize().background(slideBackground(slide))) {
-            RecapSlideContent(slide = slide, year = year, onMediaClick = onMediaClick)
+        CompositionLocalProvider(LocalRecapEntryClock provides rememberRecapEntryClock()) {
+            Box(modifier = Modifier.fillMaxSize().background(slideBackground(slide))) {
+                RecapSlideContent(slide = slide, year = year, onMediaClick = onMediaClick)
+            }
         }
     }
 }
