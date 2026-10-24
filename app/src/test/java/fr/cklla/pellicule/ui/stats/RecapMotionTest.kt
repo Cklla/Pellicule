@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.ui.stats
 
+import androidx.compose.ui.graphics.Color
 import fr.cklla.pellicule.domain.model.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -102,5 +103,21 @@ class RecapMotionTest {
 
         assertEquals(RecapMotion.PARALLAX_FACTOR * pageShift, backgroundShift, 0.001f)
         assertEquals(0f, parallaxCompensation(0f, width), 0f)
+    }
+
+    @Test
+    fun `le grain est identique d'un lancement a l'autre`() {
+        val teinte = Color(0xFFEDE8FF)
+
+        assertEquals(grainPixels(16, RecapMotion.GRAIN_SEED, teinte).toList(), grainPixels(16, RecapMotion.GRAIN_SEED, teinte).toList())
+    }
+
+    @Test
+    fun `le grain garde la teinte et varie en opacite`() {
+        val pixels = grainPixels(32, RecapMotion.GRAIN_SEED, Color(0xFFEDE8FF))
+
+        assertEquals(32 * 32, pixels.size)
+        assertTrue(pixels.all { (it and 0x00FFFFFF) == 0xEDE8FF })
+        assertTrue(pixels.map { it ushr 24 }.distinct().size > 100)
     }
 }

@@ -35,8 +35,9 @@ internal fun Modifier.recapPageFade(reducedMotion: Boolean, pageOffset: () -> Fl
     if (reducedMotion) this else graphicsLayer { alpha = pageFadeAlpha(pageOffset()) }
 
 /**
- * Fond d'une slide : voile de la couleur [tint] qui se fond dans le fond sombre, et halo violet dont
- * la parallaxe suit le glissement du pager et qui dérive une seule fois à l'entrée de la slide.
+ * Fond d'une slide : voile de la couleur [tint] qui se fond dans le fond sombre, halo violet dont
+ * la parallaxe suit le glissement du pager et qui dérive une seule fois à l'entrée de la slide, et
+ * grain fixe par-dessus.
  */
 @Composable
 internal fun RecapSlideBackground(
@@ -73,5 +74,6 @@ internal fun RecapSlideBackground(
                     }
                 },
         )
+        RecapGrain(modifier = Modifier.fillMaxSize())
     }
 }
