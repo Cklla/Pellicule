@@ -251,6 +251,11 @@ private fun RatingStars(rating: Int, tint: Color) {
 @Composable
 private fun FactsSlide(slide: RecapSlide.Facts, onMediaClick: (String) -> Unit) {
     val facts = slide.facts
+    val clock = LocalRecapEntryClock.current
+    // Les cartes présentes entrent l'une après l'autre, dans l'ordre d'affichage.
+    var cardRank = 0
+    fun nextCardEnter(): Modifier =
+        Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY + cardRank++ * RecapMotion.DETAIL_STAGGER, RecapMotion.DETAIL_DURATION)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -258,17 +263,27 @@ private fun FactsSlide(slide: RecapSlide.Facts, onMediaClick: (String) -> Unit) 
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text = stringResource(R.string.recap_story_facts_title), style = PelliculeTextStyles.detailTitle, color = TextPrimary)
-        facts.first?.let { MediaFactCard(label = R.string.recap_story_fact_first, fact = it, onMediaClick = onMediaClick) }
-        facts.last?.let { MediaFactCard(label = R.string.recap_story_fact_last, fact = it, onMediaClick = onMediaClick) }
-        facts.busiestMonth?.let { BusiestMonthCard(it) }
-        facts.oldest?.let { OldestFactCard(media = it, onMediaClick = onMediaClick) }
+        Text(
+            text = stringResource(R.string.recap_story_facts_title),
+            style = PelliculeTextStyles.detailTitle,
+            color = TextPrimary,
+            modifier = Modifier.recapEnter(clock, RecapMotion.TITLE_DELAY, RecapMotion.TITLE_DURATION),
+        )
+        facts.first?.let {
+            MediaFactCard(label = R.string.recap_story_fact_first, fact = it, onMediaClick = onMediaClick, modifier = nextCardEnter())
+        }
+        facts.last?.let {
+            MediaFactCard(label = R.string.recap_story_fact_last, fact = it, onMediaClick = onMediaClick, modifier = nextCardEnter())
+        }
+        facts.busiestMonth?.let { BusiestMonthCard(it, modifier = nextCardEnter()) }
+        facts.oldest?.let { OldestFactCard(media = it, onMediaClick = onMediaClick, modifier = nextCardEnter()) }
     }
 }
 
 @Composable
-private fun MediaFactCard(label: Int, fact: DatedMedia, onMediaClick: (String) -> Unit) {
+private fun MediaFactCard(label: Int, fact: DatedMedia, onMediaClick: (String) -> Unit, modifier: Modifier = Modifier) {
     FactCard(
+        modifier = modifier,
         label = stringResource(label),
         headline = fact.media.title,
         detail = formatRecapDate(fact.date),
@@ -278,8 +293,9 @@ private fun MediaFactCard(label: Int, fact: DatedMedia, onMediaClick: (String) -
 }
 
 @Composable
-private fun OldestFactCard(media: Media, onMediaClick: (String) -> Unit) {
+private fun OldestFactCard(media: Media, onMediaClick: (String) -> Unit, modifier: Modifier = Modifier) {
     FactCard(
+        modifier = modifier,
         label = stringResource(R.string.recap_story_fact_oldest),
         headline = media.title,
         detail = media.releaseYear?.let { stringResource(R.string.recap_story_fact_oldest_released, it) }.orEmpty(),
@@ -289,8 +305,9 @@ private fun OldestFactCard(media: Media, onMediaClick: (String) -> Unit) {
 }
 
 @Composable
-private fun BusiestMonthCard(busiest: BusiestMonth) {
+private fun BusiestMonthCard(busiest: BusiestMonth, modifier: Modifier = Modifier) {
     FactCard(
+        modifier = modifier,
         label = stringResource(R.string.recap_story_fact_busiest_month),
         headline = busiest.month.frenchName().replaceFirstChar { it.titlecase(Locale.FRENCH) },
         detail = pluralStringResource(R.plurals.recap_story_fact_month_count, busiest.count, busiest.count),
@@ -300,10 +317,17 @@ private fun BusiestMonthCard(busiest: BusiestMonth) {
 }
 
 @Composable
-private fun FactCard(label: String, headline: String, detail: String, media: Media?, onClick: (() -> Unit)?) {
+private fun FactCard(
+    label: String,
+    headline: String,
+    detail: String,
+    media: Media?,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
     val shape = RoundedCornerShape(12.dp)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .background(SurfaceCard)
