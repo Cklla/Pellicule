@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -163,18 +164,27 @@ private fun TypeFavoritesSlide(slide: RecapSlide.TypeFavorites, year: Int, onMed
         MediaType.SERIE -> R.plurals.recap_story_type_count_serie
         MediaType.ANIME -> R.plurals.recap_story_type_count_anime
     }
+    val clock = LocalRecapEntryClock.current
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)) {
+            val titleEnter = Modifier.recapEnter(clock, RecapMotion.TITLE_DELAY, RecapMotion.TITLE_DURATION)
             Text(
                 text = stringResource(R.string.recap_story_favorites_kicker),
                 style = PelliculeTextStyles.kicker,
                 color = AccentPurpleLight,
+                modifier = titleEnter,
             )
-            Text(text = stringResource(titleRes), style = PelliculeTextStyles.detailTitle, color = TextPrimary)
+            Text(
+                text = stringResource(titleRes),
+                style = PelliculeTextStyles.detailTitle,
+                color = TextPrimary,
+                modifier = titleEnter,
+            )
             Text(
                 text = pluralStringResource(countRes, slide.watchedCount, slide.watchedCount, year),
                 style = PelliculeTextStyles.detailSubtitle,
                 color = typeColor,
+                modifier = Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
             )
         }
         LazyVerticalGrid(
@@ -184,17 +194,22 @@ private fun TypeFavoritesSlide(slide: RecapSlide.TypeFavorites, year: Int, onMed
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(items = slide.favorites, key = { it.id }) { media ->
-                FavoriteCell(media = media, tint = typeColor, onClick = { onMediaClick(media.id) })
+            itemsIndexed(items = slide.favorites, key = { _, media -> media.id }) { index, media ->
+                FavoriteCell(
+                    media = media,
+                    tint = typeColor,
+                    onClick = { onMediaClick(media.id) },
+                    modifier = Modifier.recapEnter(clock, RecapMotion.posterDelay(index), RecapMotion.POSTER_DURATION),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun FavoriteCell(media: Media, tint: Color, onClick: () -> Unit) {
+private fun FavoriteCell(media: Media, tint: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(6.dp),
