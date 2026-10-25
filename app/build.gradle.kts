@@ -38,8 +38,8 @@ android {
         applicationId = "fr.cklla.pellicule"
         minSdk = 24
         targetSdk = 37
-        versionCode = 16
-        versionName = "2.1.0"
+        versionCode = 17
+        versionName = "2.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
