@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,7 +58,6 @@ import fr.cklla.pellicule.ui.theme.AccentPurpleLight
 import fr.cklla.pellicule.ui.theme.AccentPurpleMuted
 import fr.cklla.pellicule.ui.theme.BorderHairline
 import fr.cklla.pellicule.ui.theme.PelliculeTextStyles
-import fr.cklla.pellicule.ui.theme.SuccessGreen
 import fr.cklla.pellicule.ui.theme.SurfaceCard
 import fr.cklla.pellicule.ui.theme.TextPrimary
 import fr.cklla.pellicule.ui.theme.TextSecondary
@@ -67,6 +67,9 @@ import java.util.Locale
 
 private const val POSTER_ASPECT_RATIO = 2f / 3f
 private const val MOSAIC_COLUMNS = 5
+
+/** Couleur du total de la slide d'ouverture. */
+private val TotalHeroColor = TextPrimary
 
 /** Contenu d'une slide du récap en images ; les valeurs viennent telles quelles de [RecapSlide], sans calcul. */
 @Composable
@@ -81,6 +84,7 @@ internal fun RecapSlideContent(slide: RecapSlide, year: Int, onMediaClick: (Stri
 
 @Composable
 private fun TotalSlide(slide: RecapSlide.Total) {
+    val clock = LocalRecapEntryClock.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -92,46 +96,39 @@ private fun TotalSlide(slide: RecapSlide.Total) {
             text = stringResource(R.string.recap_story_total_kicker),
             style = PelliculeTextStyles.kicker,
             color = AccentPurpleLight,
+            modifier = Modifier.recapEnter(clock, RecapMotion.TITLE_DELAY, RecapMotion.TITLE_DURATION),
         )
-        Text(text = slide.total.toString(), style = PelliculeTextStyles.recapHero, color = SuccessGreen)
+        CountUpText(
+            target = slide.total,
+            clock = clock,
+            style = PelliculeTextStyles.recapHero,
+            color = TotalHeroColor,
+            modifier = Modifier.recapEnter(clock, RecapMotion.KEY_FIGURE_DELAY, RecapMotion.KEY_FIGURE_DURATION),
+        )
         Text(
             text = pluralStringResource(R.plurals.recap_story_total_title, slide.total, slide.year),
             style = PelliculeTextStyles.detailTitle,
             color = TextPrimary,
             textAlign = TextAlign.Center,
+            modifier = Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
         )
-        Spacer(modifier = Modifier.height(36.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(10.dp)
-                .clip(RoundedCornerShape(5.dp)),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        Spacer(modifier = Modifier.height(32.dp))
+        TypeRing(countsByType = slide.countsByType, total = slide.total, clock = clock)
+        Spacer(modifier = Modifier.height(24.dp))
+        Column(
+            modifier = Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             MediaType.entries.forEach { type ->
                 val count = slide.countsByType[type] ?: 0
-                if (count > 0) {
-                    Box(
-                        modifier = Modifier
-                            .weight(count.toFloat())
-                            .fillMaxSize()
-                            .background(type.color()),
-                    )
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            MediaType.entries.forEach { type ->
-                val count = slide.countsByType[type] ?: 0
-                if (count > 0) TypeLegendRow(type = type, count = count)
+                if (count > 0) TypeLegendRow(type = type, count = count, clock = clock)
             }
         }
     }
 }
 
 @Composable
-private fun TypeLegendRow(type: MediaType, count: Int) {
+private fun TypeLegendRow(type: MediaType, count: Int, clock: RecapEntryClock) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -144,7 +141,13 @@ private fun TypeLegendRow(type: MediaType, count: Int) {
             color = TextSecondary,
             modifier = Modifier.weight(1f),
         )
-        Text(text = count.toString(), style = PelliculeTextStyles.legendCount, color = type.color())
+        CountUpText(
+            target = count,
+            clock = clock,
+            style = PelliculeTextStyles.legendCount,
+            color = type.color(),
+            contentAlignment = Alignment.CenterEnd,
+        )
     }
 }
 
@@ -161,18 +164,27 @@ private fun TypeFavoritesSlide(slide: RecapSlide.TypeFavorites, year: Int, onMed
         MediaType.SERIE -> R.plurals.recap_story_type_count_serie
         MediaType.ANIME -> R.plurals.recap_story_type_count_anime
     }
+    val clock = LocalRecapEntryClock.current
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)) {
+            val titleEnter = Modifier.recapEnter(clock, RecapMotion.TITLE_DELAY, RecapMotion.TITLE_DURATION)
             Text(
                 text = stringResource(R.string.recap_story_favorites_kicker),
                 style = PelliculeTextStyles.kicker,
                 color = AccentPurpleLight,
+                modifier = titleEnter,
             )
-            Text(text = stringResource(titleRes), style = PelliculeTextStyles.detailTitle, color = TextPrimary)
+            Text(
+                text = stringResource(titleRes),
+                style = PelliculeTextStyles.detailTitle,
+                color = TextPrimary,
+                modifier = titleEnter,
+            )
             Text(
                 text = pluralStringResource(countRes, slide.watchedCount, slide.watchedCount, year),
                 style = PelliculeTextStyles.detailSubtitle,
                 color = typeColor,
+                modifier = Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
             )
         }
         LazyVerticalGrid(
@@ -182,17 +194,22 @@ private fun TypeFavoritesSlide(slide: RecapSlide.TypeFavorites, year: Int, onMed
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(items = slide.favorites, key = { it.id }) { media ->
-                FavoriteCell(media = media, tint = typeColor, onClick = { onMediaClick(media.id) })
+            itemsIndexed(items = slide.favorites, key = { _, media -> media.id }) { index, media ->
+                FavoriteCell(
+                    media = media,
+                    tint = typeColor,
+                    onClick = { onMediaClick(media.id) },
+                    modifier = Modifier.recapEnter(clock, RecapMotion.posterDelay(index), RecapMotion.POSTER_DURATION),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun FavoriteCell(media: Media, tint: Color, onClick: () -> Unit) {
+private fun FavoriteCell(media: Media, tint: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -234,6 +251,11 @@ private fun RatingStars(rating: Int, tint: Color) {
 @Composable
 private fun FactsSlide(slide: RecapSlide.Facts, onMediaClick: (String) -> Unit) {
     val facts = slide.facts
+    val clock = LocalRecapEntryClock.current
+    // Les cartes présentes entrent l'une après l'autre, dans l'ordre d'affichage.
+    var cardRank = 0
+    fun nextCardEnter(): Modifier =
+        Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY + cardRank++ * RecapMotion.DETAIL_STAGGER, RecapMotion.DETAIL_DURATION)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -241,17 +263,27 @@ private fun FactsSlide(slide: RecapSlide.Facts, onMediaClick: (String) -> Unit) 
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text = stringResource(R.string.recap_story_facts_title), style = PelliculeTextStyles.detailTitle, color = TextPrimary)
-        facts.first?.let { MediaFactCard(label = R.string.recap_story_fact_first, fact = it, onMediaClick = onMediaClick) }
-        facts.last?.let { MediaFactCard(label = R.string.recap_story_fact_last, fact = it, onMediaClick = onMediaClick) }
-        facts.busiestMonth?.let { BusiestMonthCard(it) }
-        facts.oldest?.let { OldestFactCard(media = it, onMediaClick = onMediaClick) }
+        Text(
+            text = stringResource(R.string.recap_story_facts_title),
+            style = PelliculeTextStyles.detailTitle,
+            color = TextPrimary,
+            modifier = Modifier.recapEnter(clock, RecapMotion.TITLE_DELAY, RecapMotion.TITLE_DURATION),
+        )
+        facts.first?.let {
+            MediaFactCard(label = R.string.recap_story_fact_first, fact = it, onMediaClick = onMediaClick, modifier = nextCardEnter())
+        }
+        facts.last?.let {
+            MediaFactCard(label = R.string.recap_story_fact_last, fact = it, onMediaClick = onMediaClick, modifier = nextCardEnter())
+        }
+        facts.busiestMonth?.let { BusiestMonthCard(it, modifier = nextCardEnter()) }
+        facts.oldest?.let { OldestFactCard(media = it, onMediaClick = onMediaClick, modifier = nextCardEnter()) }
     }
 }
 
 @Composable
-private fun MediaFactCard(label: Int, fact: DatedMedia, onMediaClick: (String) -> Unit) {
+private fun MediaFactCard(label: Int, fact: DatedMedia, onMediaClick: (String) -> Unit, modifier: Modifier = Modifier) {
     FactCard(
+        modifier = modifier,
         label = stringResource(label),
         headline = fact.media.title,
         detail = formatRecapDate(fact.date),
@@ -261,8 +293,9 @@ private fun MediaFactCard(label: Int, fact: DatedMedia, onMediaClick: (String) -
 }
 
 @Composable
-private fun OldestFactCard(media: Media, onMediaClick: (String) -> Unit) {
+private fun OldestFactCard(media: Media, onMediaClick: (String) -> Unit, modifier: Modifier = Modifier) {
     FactCard(
+        modifier = modifier,
         label = stringResource(R.string.recap_story_fact_oldest),
         headline = media.title,
         detail = media.releaseYear?.let { stringResource(R.string.recap_story_fact_oldest_released, it) }.orEmpty(),
@@ -272,8 +305,9 @@ private fun OldestFactCard(media: Media, onMediaClick: (String) -> Unit) {
 }
 
 @Composable
-private fun BusiestMonthCard(busiest: BusiestMonth) {
+private fun BusiestMonthCard(busiest: BusiestMonth, modifier: Modifier = Modifier) {
     FactCard(
+        modifier = modifier,
         label = stringResource(R.string.recap_story_fact_busiest_month),
         headline = busiest.month.frenchName().replaceFirstChar { it.titlecase(Locale.FRENCH) },
         detail = pluralStringResource(R.plurals.recap_story_fact_month_count, busiest.count, busiest.count),
@@ -283,10 +317,17 @@ private fun BusiestMonthCard(busiest: BusiestMonth) {
 }
 
 @Composable
-private fun FactCard(label: String, headline: String, detail: String, media: Media?, onClick: (() -> Unit)?) {
+private fun FactCard(
+    label: String,
+    headline: String,
+    detail: String,
+    media: Media?,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
     val shape = RoundedCornerShape(12.dp)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .background(SurfaceCard)
@@ -317,18 +358,28 @@ private fun FactCard(label: String, headline: String, detail: String, media: Med
 
 @Composable
 private fun MosaicSlide(slide: RecapSlide.Mosaic, year: Int, onMediaClick: (String) -> Unit) {
+    val clock = LocalRecapEntryClock.current
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)) {
-            Text(text = stringResource(R.string.recap_story_mosaic_title), style = PelliculeTextStyles.detailTitle, color = TextPrimary)
+            Text(
+                text = stringResource(R.string.recap_story_mosaic_title),
+                style = PelliculeTextStyles.detailTitle,
+                color = TextPrimary,
+                modifier = Modifier.recapEnter(clock, RecapMotion.TITLE_DELAY, RecapMotion.TITLE_DURATION),
+            )
             Text(
                 text = pluralStringResource(R.plurals.recap_story_mosaic_subtitle, slide.media.size, slide.media.size, year),
                 style = PelliculeTextStyles.detailSubtitle,
                 color = TextTertiary,
+                modifier = Modifier.recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
             )
         }
+        // La grille entre d'un bloc : animer chaque tuile coûterait cher avec une centaine d'affiches.
         LazyVerticalGrid(
             columns = GridCells.Fixed(MOSAIC_COLUMNS),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .recapEnter(clock, RecapMotion.DETAIL_DELAY, RecapMotion.DETAIL_DURATION),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
