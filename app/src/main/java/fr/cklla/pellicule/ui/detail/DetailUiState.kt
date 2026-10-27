@@ -12,6 +12,8 @@ data class DetailUiState(
     val media: Media? = null,
     /** Synopsis TMDB, récupéré à l'ouverture de la fiche ; `null` tant qu'il n'est pas encore chargé. */
     val synopsis: String? = null,
+    /** Durée d'un film en minutes ; `null` tant qu'elle n'est pas chargée, si TMDB l'ignore, ou hors film. */
+    val runtimeMinutes: Int? = null,
     /** Plateformes de streaming françaises ; `null` tant que la réponse TMDB n'est pas arrivée. */
     val watchAvailability: WatchAvailability? = null,
     /**

@@ -19,6 +19,8 @@ class FakeTmdbApi : TmdbApi {
     var episodes: List<TmdbEpisodeDto> = emptyList()
     /** Synopsis par langue (`"fr-FR"`/`"en-US"`), pour tester le repli de langue de [getTvDetails]/[getMovieDetails]. */
     var overviewByLanguage: Map<String, String?> = emptyMap()
+    /** Durée renvoyée par [getMovieDetails], en minutes. */
+    var movieRuntime: Int? = null
     /** Offres par code pays, telles que renvoyées par les endpoints `watch/providers`. */
     var watchProviders = TmdbWatchProvidersResponseDto()
     var shouldThrow = false
@@ -55,7 +57,7 @@ class FakeTmdbApi : TmdbApi {
 
     override suspend fun getMovieDetails(movieId: Long, apiKey: String, language: String): TmdbMovieDetailsDto {
         if (shouldThrow) error("Échec réseau simulé")
-        return TmdbMovieDetailsDto(overview = overviewByLanguage[language])
+        return TmdbMovieDetailsDto(overview = overviewByLanguage[language], runtime = movieRuntime)
     }
 
     override suspend fun getMovieWatchProviders(movieId: Long, apiKey: String): TmdbWatchProvidersResponseDto {

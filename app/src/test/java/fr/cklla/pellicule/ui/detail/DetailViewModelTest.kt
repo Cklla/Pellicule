@@ -74,6 +74,7 @@ class DetailViewModelTest {
         episodeRepository: EpisodeRepository = fakeEpisodeRepository(),
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
+        movieRuntimeRepository: FakeMovieRuntimeRepository = FakeMovieRuntimeRepository(),
         watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
         tvShowInfoRepository: FakeTvShowInfoRepository = FakeTvShowInfoRepository(),
         reminderRepository: EpisodeReminderRepository = EpisodeReminderRepositoryImpl(FakeEpisodeReminderDao()),
@@ -84,6 +85,7 @@ class DetailViewModelTest {
         episodeRepository = episodeRepository,
         jellyfinRepository = jellyfinRepository,
         synopsisRepository = synopsisRepository,
+        movieRuntimeRepository = movieRuntimeRepository,
         watchProvidersRepository = watchProvidersRepository,
         setEpisodeWatched = SetEpisodeWatchedUseCase(
             mediaRepository,
@@ -108,6 +110,7 @@ class DetailViewModelTest {
         episodeRepository: EpisodeRepository = fakeEpisodeRepository(),
         jellyfinRepository: JellyfinRepository = FakeJellyfinRepository(),
         synopsisRepository: FakeSynopsisRepository = FakeSynopsisRepository(),
+        movieRuntimeRepository: FakeMovieRuntimeRepository = FakeMovieRuntimeRepository(),
         watchProvidersRepository: FakeWatchProvidersRepository = FakeWatchProvidersRepository(),
         tvShowInfoRepository: FakeTvShowInfoRepository = FakeTvShowInfoRepository(),
         reminderRepository: EpisodeReminderRepository = EpisodeReminderRepositoryImpl(FakeEpisodeReminderDao()),
@@ -126,6 +129,7 @@ class DetailViewModelTest {
         episodeRepository = episodeRepository,
         jellyfinRepository = jellyfinRepository,
         synopsisRepository = synopsisRepository,
+        movieRuntimeRepository = movieRuntimeRepository,
         watchProvidersRepository = watchProvidersRepository,
         setEpisodeWatched = SetEpisodeWatchedUseCase(
             mediaRepository,
@@ -185,6 +189,58 @@ class DetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals("Paul Atréides...", viewModel.uiState.value.synopsis)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `ouvrir la fiche d'un film charge sa duree`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val addResult = repository.addMedia(Media(title = "Matrix", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 603))
+        val mediaId = (addResult as Resource.Success).data
+        val runtimeRepository = FakeMovieRuntimeRepository().apply { response = Resource.Success(136) }
+
+        val viewModel = viewModelFor(mediaId, repository, movieRuntimeRepository = runtimeRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(136, viewModel.uiState.value.runtimeMinutes)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `l'apercu d'un film charge aussi sa duree`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val runtimeRepository = FakeMovieRuntimeRepository().apply { response = Resource.Success(98) }
+        val viewModel = previewViewModelFor(repository, type = "FILM", movieRuntimeRepository = runtimeRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(98, viewModel.uiState.value.runtimeMinutes)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `une serie ne demande pas de duree`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val runtimeRepository = FakeMovieRuntimeRepository().apply { response = Resource.Success(45) }
+        val viewModel = previewViewModelFor(repository, type = "SERIE", movieRuntimeRepository = runtimeRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.runtimeMinutes)
+        assertEquals(0, runtimeRepository.callCount)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `un echec de chargement de la duree la laisse absente`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val runtimeRepository = FakeMovieRuntimeRepository().apply { response = Resource.Error("hors ligne") }
+        val viewModel = previewViewModelFor(repository, type = "FILM", movieRuntimeRepository = runtimeRepository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.runtimeMinutes)
         collectorJob.cancel()
     }
 
@@ -472,6 +528,7 @@ class DetailViewModelTest {
             episodeRepository = episodeRepository,
             jellyfinRepository = jellyfinRepository,
             synopsisRepository = FakeSynopsisRepository(),
+            movieRuntimeRepository = FakeMovieRuntimeRepository(),
             watchProvidersRepository = FakeWatchProvidersRepository(),
             setEpisodeWatched = SetEpisodeWatchedUseCase(
                 repository,

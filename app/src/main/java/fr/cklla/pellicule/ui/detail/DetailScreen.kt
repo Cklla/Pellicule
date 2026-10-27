@@ -115,6 +115,7 @@ fun DetailScreen(
         watchedYear = uiState.watchedYear,
         watchedYearChoices = uiState.watchedYearChoices,
         synopsis = uiState.synopsis,
+        runtimeMinutes = uiState.runtimeMinutes,
         watchAvailability = uiState.watchAvailability,
         nextAiring = uiState.nextAiring,
         reminderEnabled = uiState.reminderEnabled,
@@ -145,6 +146,7 @@ private fun DetailContent(
     watchedYear: Int?,
     watchedYearChoices: List<Int>,
     synopsis: String?,
+    runtimeMinutes: Int?,
     watchAvailability: WatchAvailability?,
     nextAiring: NextAiring?,
     reminderEnabled: Boolean,
@@ -201,7 +203,7 @@ private fun DetailContent(
                 letterStyle = PelliculeTextStyles.coverLetterLarge,
                 letterAlpha = 0.14f,
             )
-            TitleSection(media = media)
+            TitleSection(media = media, runtimeMinutes = runtimeMinutes)
             // Visible dès l'aperçu (pas besoin d'être suivi pour lire de quoi ça parle), masqué
             // tant que le synopsis n'est pas encore arrivé de TMDB plutôt que d'afficher un vide.
             if (!synopsis.isNullOrBlank()) {
@@ -372,16 +374,19 @@ private fun SeasonMenu(
 }
 
 @Composable
-private fun TitleSection(media: Media) {
+private fun TitleSection(media: Media, runtimeMinutes: Int?) {
     Column {
         Text(text = media.title, style = PelliculeTextStyles.detailTitle, color = TextPrimary)
         Spacer(modifier = Modifier.height(4.dp))
+        val typeYear = stringResource(
+            R.string.media_card_type_year,
+            stringResource(media.type.labelRes()),
+            media.releaseYear?.toString() ?: stringResource(R.string.media_card_year_unknown),
+        )
         Text(
-            text = stringResource(
-                R.string.media_card_type_year,
-                stringResource(media.type.labelRes()),
-                media.releaseYear?.toString() ?: stringResource(R.string.media_card_year_unknown),
-            ),
+            // Durée ajoutée seulement une fois connue : rien n'est réservé pendant l'appel TMDB.
+            text = runtimeMinutes?.let { stringResource(R.string.detail_type_year_runtime, typeYear, formatRuntime(it)) }
+                ?: typeYear,
             style = PelliculeTextStyles.detailSubtitle,
             color = TextTertiary,
         )
@@ -905,6 +910,7 @@ private fun DetailContentPreview() {
             watchedYear = 2026,
             watchedYearChoices = (2026 downTo 1997).toList(),
             synopsis = "Une danseuse d'un groupe de pop japonais se lance dans une carrière d'actrice…",
+            runtimeMinutes = null,
             watchAvailability = WatchAvailability.Known(
                 streaming = listOf(WatchProvider(id = 8, name = "Netflix", logoUrl = null)),
                 rentOrBuy = emptyList(),
@@ -943,6 +949,7 @@ private fun DetailContentApercuPreview() {
             watchedYear = null,
             watchedYearChoices = emptyList(),
             synopsis = null,
+            runtimeMinutes = null,
             watchAvailability = WatchAvailability.Unknown,
             nextAiring = null,
             reminderEnabled = false,

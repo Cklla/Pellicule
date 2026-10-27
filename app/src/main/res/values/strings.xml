@@ -15,6 +15,7 @@
     <string name="filter_type_tous">Tous les types</string>
     <string name="media_card_type_year">%1$s · %2$s</string>
     <string name="media_card_year_unknown">année inconnue</string>
+    <string name="detail_type_year_runtime">%1$s · %2$s</string>
     <string name="next_episode_label">S%1$d · É%2$d</string>
     <string name="next_episode_label_titled">S%1$d · É%2$d — %3$s</string>
     <string name="next_episode_plus_one">+1</string>

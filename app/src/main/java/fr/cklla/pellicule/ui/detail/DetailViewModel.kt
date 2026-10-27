@@ -21,6 +21,7 @@ import fr.cklla.pellicule.domain.repository.EpisodeReminderRepository
 import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
+import fr.cklla.pellicule.domain.repository.MovieRuntimeRepository
 import fr.cklla.pellicule.domain.repository.SynopsisRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
 import fr.cklla.pellicule.domain.repository.TvShowInfoRepository
@@ -71,6 +72,7 @@ class DetailViewModel @Inject constructor(
     private val episodeRepository: EpisodeRepository,
     private val jellyfinRepository: JellyfinRepository,
     private val synopsisRepository: SynopsisRepository,
+    private val movieRuntimeRepository: MovieRuntimeRepository,
     private val watchProvidersRepository: WatchProvidersRepository,
     private val setEpisodeWatched: SetEpisodeWatchedUseCase,
     private val tvShowInfoRepository: TvShowInfoRepository,
@@ -84,6 +86,7 @@ class DetailViewModel @Inject constructor(
     private val workingMedia = MutableStateFlow(previewResult?.toMedia())
     private val isLoading = MutableStateFlow(mediaId != null)
     private val synopsis = MutableStateFlow<String?>(null)
+    private val runtimeMinutes = MutableStateFlow<Int?>(null)
     private val watchAvailability = MutableStateFlow<WatchAvailability?>(null)
     private val nextAiring = MutableStateFlow<NextAiring?>(null)
 
@@ -102,6 +105,7 @@ class DetailViewModel @Inject constructor(
                 loadSeasonsIfApplicable()
                 media?.let {
                     fetchSynopsis(it)
+                    fetchRuntime(it)
                     fetchWatchAvailability(it)
                     observeNextAiring(it)
                 }
@@ -109,6 +113,7 @@ class DetailViewModel @Inject constructor(
         } else {
             workingMedia.value?.let {
                 fetchSynopsis(it)
+                fetchRuntime(it)
                 fetchWatchAvailability(it)
                 observeNextAiring(it)
             }
@@ -150,6 +155,16 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             val result = synopsisRepository.getSynopsis(tmdbId, media.type)
             if (result is Resource.Success) synopsis.value = result.data
+        }
+    }
+
+    /** Durée TMDB d'un film, comme le synopsis jamais mise en cache ; sans objet pour une série/anime. */
+    private fun fetchRuntime(media: Media) {
+        val tmdbId = media.tmdbId ?: return
+        if (media.type != MediaType.FILM) return
+        viewModelScope.launch {
+            val result = movieRuntimeRepository.getRuntimeMinutes(tmdbId)
+            if (result is Resource.Success) runtimeMinutes.value = result.data
         }
     }
 
@@ -226,13 +241,21 @@ class DetailViewModel @Inject constructor(
     private data class MediaSectionState(
         val media: Media? = null,
         val synopsis: String? = null,
+        val runtimeMinutes: Int? = null,
         val watchAvailability: WatchAvailability? = null,
         val airing: AiringSectionState = AiringSectionState(),
     )
 
     // `combine` n'a pas d'overload à 7 flux typés : tout ce qui décrit le contenu lui-même est
     // regroupé en amont pour rester dans la limite des 5 arguments du `combine` final.
-    private val mediaSection = combine(workingMedia, synopsis, watchAvailability, airingSection, ::MediaSectionState)
+    private val mediaSection = combine(
+        workingMedia,
+        synopsis,
+        runtimeMinutes,
+        watchAvailability,
+        airingSection,
+        ::MediaSectionState,
+    )
 
     val uiState: StateFlow<DetailUiState> = combine(
         isLoading,
@@ -245,6 +268,7 @@ class DetailViewModel @Inject constructor(
             isLoading = loading,
             media = mediaState.media,
             synopsis = mediaState.synopsis,
+            runtimeMinutes = mediaState.runtimeMinutes,
             watchAvailability = mediaState.watchAvailability,
             nextAiring = mediaState.airing.nextAiring,
             reminderEnabled = mediaState.airing.reminderEnabled,

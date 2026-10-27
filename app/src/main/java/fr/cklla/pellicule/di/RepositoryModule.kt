@@ -14,6 +14,7 @@ import fr.cklla.pellicule.data.repository.EpisodeRepositoryImpl
 import fr.cklla.pellicule.data.repository.JellyfinRepositoryImpl
 import fr.cklla.pellicule.data.repository.MediaRepositoryImpl
 import fr.cklla.pellicule.data.repository.MediaSearchRepositoryImpl
+import fr.cklla.pellicule.data.repository.MovieRuntimeRepositoryImpl
 import fr.cklla.pellicule.data.repository.SynopsisRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvDetailsRepositoryImpl
 import fr.cklla.pellicule.data.repository.TvShowInfoRepositoryImpl
@@ -28,6 +29,7 @@ import fr.cklla.pellicule.domain.repository.EpisodeRepository
 import fr.cklla.pellicule.domain.repository.JellyfinRepository
 import fr.cklla.pellicule.domain.repository.MediaRepository
 import fr.cklla.pellicule.domain.repository.MediaSearchRepository
+import fr.cklla.pellicule.domain.repository.MovieRuntimeRepository
 import fr.cklla.pellicule.domain.repository.SynopsisRepository
 import fr.cklla.pellicule.domain.repository.TvDetailsRepository
 import fr.cklla.pellicule.domain.repository.TvShowInfoRepository
@@ -71,6 +73,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindWatchProvidersRepository(impl: WatchProvidersRepositoryImpl): WatchProvidersRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindMovieRuntimeRepository(impl: MovieRuntimeRepositoryImpl): MovieRuntimeRepository
 
     @Binds
     @Singleton
