@@ -76,6 +76,7 @@ import fr.cklla.pellicule.domain.model.WatchStatus
 import fr.cklla.pellicule.ui.components.MediaCoverPlaceholder
 import fr.cklla.pellicule.ui.labelRes
 import fr.cklla.pellicule.ui.theme.AccentPurple
+import fr.cklla.pellicule.ui.theme.AccentPurpleLight
 import fr.cklla.pellicule.ui.theme.AccentPurpleMuted
 import fr.cklla.pellicule.ui.theme.BackgroundDark
 import fr.cklla.pellicule.ui.theme.BorderHairline
@@ -616,7 +617,7 @@ private fun RatingSection(rating: Int?, onRatingSelected: (Int?) -> Unit) {
                     Icon(
                         imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.Star,
                         contentDescription = stringResource(R.string.detail_rating_star_content_description, star),
-                        tint = if (filled) AccentPurple else AccentPurpleMuted,
+                        tint = if (filled) AccentPurpleLight else AccentPurpleMuted,
                         modifier = Modifier.size(26.dp),
                     )
                 }
