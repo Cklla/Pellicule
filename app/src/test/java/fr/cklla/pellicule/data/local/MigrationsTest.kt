@@ -15,9 +15,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Vérifie la migration 7 → 8 contre le schéma que Room a exporté pour la version 8 : les instructions
- * exécutées doivent produire exactement les tables et index attendus par la base, faute de quoi Room
- * refuse d'ouvrir la base au lancement.
+ * Vérifie les migrations 7 → 8 et 8 → 9 contre le schéma que Room a exporté pour la version visée : les
+ * instructions exécutées doivent produire exactement les tables et colonnes attendues par la base, faute de
+ * quoi Room refuse d'ouvrir la base au lancement.
  */
 class MigrationsTest {
 
@@ -85,5 +85,35 @@ class MigrationsTest {
 
         assertEquals(setOf("pending_operation"), tables(8) - tables(7))
         assertEquals(emptySet<String>(), tables(7) - tables(8))
+    }
+
+    @Test
+    fun `la migration 8 vers 9 va de la version 8 a la version 9`() {
+        assertEquals(8, MIGRATION_8_9.startVersion)
+        assertEquals(9, MIGRATION_8_9.endVersion)
+    }
+
+    @Test
+    fun `la migration 8 vers 9 ajoute la colonne des notes telle que Room l'attend`() {
+        val executed = mutableListOf<String>()
+
+        MIGRATION_8_9.migrate(recordingConnection(executed))
+
+        assertEquals(listOf("ALTER TABLE `media` ADD COLUMN `notes` TEXT NOT NULL DEFAULT ''"), executed)
+        assertTrue(
+            "le schéma 9 doit déclarer la même colonne",
+            createSql(exportedSchema(9), "media").contains("`notes` TEXT NOT NULL DEFAULT ''"),
+        )
+    }
+
+    @Test
+    fun `la version 9 ne differe de la version 8 que par les notes de media`() {
+        fun columns(version: Int): Set<String> {
+            val media = entities(exportedSchema(version)).map { it.jsonObject }.first { it.getValue("tableName").jsonPrimitive.content == "media" }
+            return media.getValue("fields").jsonArray.map { it.jsonObject.getValue("columnName").jsonPrimitive.content }.toSet()
+        }
+
+        assertEquals(setOf("notes"), columns(9) - columns(8))
+        assertEquals(emptySet<String>(), columns(8) - columns(9))
     }
 }

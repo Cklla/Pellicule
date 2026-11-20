@@ -129,6 +129,12 @@ object PelliculeTextStyles {
         fontSize = 12.5.sp,
     )
 
+    val notesText = TextStyle(
+        fontFamily = InterFamily,
+        fontSize = 13.5.sp,
+        lineHeight = 20.sp,
+    )
+
     // --- Statistiques ---
 
     val statValueMedium = TextStyle(

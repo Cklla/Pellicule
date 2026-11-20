@@ -1,6 +1,7 @@
 package fr.cklla.pellicule.data.remote.supabase
 
 import fr.cklla.pellicule.domain.model.EpisodeKey
+import fr.cklla.pellicule.domain.model.MAX_NOTES_LENGTH
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.WatchStatus
@@ -11,7 +12,7 @@ import kotlinx.serialization.Serializable
  * Lignes des tables `media` et `watched_episode`, telles que l'API REST les échange. Aucune valeur par
  * défaut sur les champs : le sérialiseur n'écrit pas une propriété égale à sa valeur par défaut, et un
  * `rating` repassé à `null` doit bien être envoyé comme `null` pour effacer la note côté serveur.
- * `user_id` est absent : le serveur le remplit avec le compte connecté.
+ * `notes` est non nul, comme dans la base (défaut `''`). `user_id` est absent : le serveur le remplit avec le compte connecté.
  */
 @Serializable
 internal data class MediaRow(
@@ -25,6 +26,7 @@ internal data class MediaRow(
     @SerialName("jellyfin_id") val jellyfinId: String?,
     val rating: Int?,
     @SerialName("watched_at") val watchedAt: Long?,
+    val notes: String,
 )
 
 @Serializable
@@ -45,6 +47,9 @@ internal fun Media.toRow() = MediaRow(
     jellyfinId = jellyfinId,
     rating = rating,
     watchedAt = watchedAt,
+    // Dernier filet avant l'envoi : une valeur hors borne est refusée définitivement par le serveur, et
+    // l'écriture abandonnée ferait disparaître le contenu entier. Mieux vaut couper la fin du texte.
+    notes = notes.take(MAX_NOTES_LENGTH),
 )
 
 /**
@@ -67,6 +72,7 @@ internal fun MediaRow.toMediaOrNull(): Media? {
         jellyfinId = jellyfinId,
         rating = rating,
         watchedAt = watchedAt,
+        notes = notes,
     )
 }
 

@@ -14,6 +14,7 @@ import fr.cklla.pellicule.domain.model.EpisodeAirInfo
 import fr.cklla.pellicule.domain.model.EpisodeInfo
 import fr.cklla.pellicule.domain.model.EpisodeKey
 import fr.cklla.pellicule.domain.model.JellyfinSession
+import fr.cklla.pellicule.domain.model.MAX_NOTES_LENGTH
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.Resource
@@ -773,6 +774,76 @@ class DetailViewModelTest {
         val stored = repository.observeMediaById(mediaId).first()
         assertEquals(WatchStatus.EN_COURS, stored?.status)
         assertEquals(4, stored?.rating)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `saisir des notes les enregistre sur le contenu`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (repository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631),
+        ) as Resource.Success).data
+        val viewModel = viewModelFor(mediaId, repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onNotesChanged("Superbe")
+        viewModel.onNotesChanged("Superbe, à revoir.")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Superbe, à revoir.", viewModel.uiState.value.media?.notes)
+        assertEquals("Superbe, à revoir.", repository.observeMediaById(mediaId).first()?.notes)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `des notes plus longues que la limite sont coupees a la saisie`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (repository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631),
+        ) as Resource.Success).data
+        val viewModel = viewModelFor(mediaId, repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onNotesChanged("x".repeat(MAX_NOTES_LENGTH + 50))
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(MAX_NOTES_LENGTH, repository.observeMediaById(mediaId).first()?.notes?.length)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `des notes saisies juste avant une note par etoiles ne sont pas perdues`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val mediaId = (repository.addMedia(
+            Media(title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR, tmdbId = 438631),
+        ) as Resource.Success).data
+        val viewModel = viewModelFor(mediaId, repository)
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onNotesChanged("Superbe")
+        viewModel.onRatingSelected(5)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        val stored = repository.observeMediaById(mediaId).first()
+        assertEquals("Superbe", stored?.notes)
+        assertEquals(5, stored?.rating)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `saisir des notes sur un apercu pas encore ajoute ne persiste rien`() = runTest {
+        val repository = fakeMediaRepository(FakeMediaDao())
+        val viewModel = previewViewModelFor(repository, type = "FILM")
+        val collectorJob = launch { viewModel.uiState.collect {} }
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onNotesChanged("Brouillon")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(emptyList<Media>(), repository.observeMedia().first())
         collectorJob.cancel()
     }
 

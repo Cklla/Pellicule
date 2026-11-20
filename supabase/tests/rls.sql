@@ -90,9 +90,16 @@ select pg_temp.refuse($q$insert into public.media (id, title, type, status, rati
 select pg_temp.refuse($q$insert into public.media (id, title, type, status, release_year) values (gen_random_uuid(), 'x', 'FILM', 'VU', 1700)$q$, 'année hors bornes');
 select pg_temp.refuse($q$insert into public.media (id, title, type, status, poster_url) values (gen_random_uuid(), 'x', 'FILM', 'VU', repeat('x', 2001))$q$, 'affiche trop longue');
 select pg_temp.refuse($q$insert into public.media (id, title, type, status, watched_at) values (gen_random_uuid(), 'x', 'FILM', 'VU', -1)$q$, 'date de visionnage négative');
+-- Notes libres : vides par défaut, 5000 caractères acceptés, 5001 et null refusés.
+insert into public.media (id, title, type, status, notes) values (gen_random_uuid(), 'notes limite', 'FILM', 'VU', repeat('é', 5000));
+select pg_temp.refuse($q$insert into public.media (id, title, type, status, notes) values (gen_random_uuid(), 'x', 'FILM', 'VU', repeat('x', 5001))$q$, 'notes de 5001 caractères');
+select pg_temp.refuse($q$insert into public.media (id, title, type, status, notes) values (gen_random_uuid(), 'x', 'FILM', 'VU', null)$q$, 'notes nulles');
 -- Champs optionnels absents, valeurs limites acceptées.
 insert into public.media (id, title, type, status, tmdb_id, release_year, rating, watched_at)
     values (gen_random_uuid(), 'limite', 'ANIME', 'VU', 9999999999, 2999, 5, 32503680000000);
+do $$ begin
+    assert (select notes from public.media where title = 'limite') = '', 'notes par défaut';
+end $$;
 -- Un épisode peut être inséré deux fois avec on conflict (rejeu idempotent).
 insert into public.watched_episode (media_id, season, episode)
     values ('11111111-1111-1111-1111-111111111111', 1, 1) on conflict do nothing;

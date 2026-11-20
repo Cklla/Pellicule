@@ -128,3 +128,13 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         )
     }
 }
+
+/**
+ * Ajoute les notes libres de la fiche. Colonne additive avec une valeur par défaut vide : les contenus
+ * déjà suivis n'ont simplement pas de notes.
+ */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `media` ADD COLUMN `notes` TEXT NOT NULL DEFAULT ''")
+    }
+}
