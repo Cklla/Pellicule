@@ -9,6 +9,7 @@ import fr.cklla.pellicule.domain.calendar.upcomingAiring
 import fr.cklla.pellicule.domain.model.AirDate
 import fr.cklla.pellicule.domain.model.EpisodeInfo
 import fr.cklla.pellicule.domain.model.EpisodeKey
+import fr.cklla.pellicule.domain.model.MAX_NOTES_LENGTH
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaSearchResult
 import fr.cklla.pellicule.domain.model.MediaType
@@ -347,6 +348,10 @@ class DetailViewModel @Inject constructor(
     // note actuelle (voir `RatingSection`) doit pouvoir revenir à cet état, pas seulement en
     // choisir une nouvelle.
     fun onRatingSelected(rating: Int?) = applyEdit { it.copy(rating = rating) }
+
+    // Les notes sont bornées à la saisie (limite du serveur) : un texte plus long est coupé ici, sous les
+    // yeux de l'utilisateur, plutôt qu'au moment de l'envoi où la fin disparaîtrait sans qu'il le voie.
+    fun onNotesChanged(notes: String) = applyEdit { it.copy(notes = notes.take(MAX_NOTES_LENGTH)) }
 
     /**
      * Active ou éteint le rappel de sortie d'épisodes. La permission de notification a déjà été

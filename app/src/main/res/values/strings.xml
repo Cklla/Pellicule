@@ -67,6 +67,8 @@
     <string name="detail_watched_year_dialog_cancel">Annuler</string>
     <string name="detail_rating_label">Note perso</string>
     <string name="detail_rating_star_content_description">Donner une note de %1$d sur 5</string>
+    <string name="detail_notes_label">Notes libres</string>
+    <string name="detail_notes_placeholder">Impressions, avis, où tu t\'es arrêté…</string>
     <string name="detail_add_action">Ajouter au suivi</string>
     <string name="detail_remove_action">Retirer du suivi</string>
     <string name="detail_remove_confirm_title">Retirer ce contenu du suivi ?</string>

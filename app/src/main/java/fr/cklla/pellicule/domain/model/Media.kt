@@ -20,6 +20,8 @@ package fr.cklla.pellicule.domain.model
  *   Repository à chaque transition de statut (voir `MediaRepositoryImpl.resolveWatchedAt`) ; seule
  *   exception, l'année peut être corrigée à la main via `MediaRepository.setWatchedYear`, tant que
  *   le contenu reste au statut Vu. Effacé dès que le statut quitte [WatchStatus.VU].
+ * @param notes notes libres de l'utilisateur sur ce contenu (impressions, où il s'est arrêté…), chaîne
+ *   vide s'il n'en a pas écrit. Bornées à [MAX_NOTES_LENGTH] caractères, limite que le serveur impose aussi.
  */
 data class Media(
     val id: String = "",
@@ -32,4 +34,8 @@ data class Media(
     val jellyfinId: String? = null,
     val rating: Int? = null,
     val watchedAt: Long? = null,
+    val notes: String = "",
 )
+
+/** Longueur maximale des notes libres, identique à la contrainte `CHECK` de la colonne `notes` côté serveur. */
+const val MAX_NOTES_LENGTH = 5000

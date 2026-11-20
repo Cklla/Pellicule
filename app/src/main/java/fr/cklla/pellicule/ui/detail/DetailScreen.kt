@@ -3,6 +3,8 @@ package fr.cklla.pellicule.ui.detail
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -51,10 +54,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +91,7 @@ import fr.cklla.pellicule.ui.theme.PelliculeTextStyles
 import fr.cklla.pellicule.ui.theme.PelliculeTheme
 import fr.cklla.pellicule.ui.theme.SuccessGreen
 import fr.cklla.pellicule.ui.theme.SurfaceCard
+import fr.cklla.pellicule.ui.theme.TextSecondary
 import fr.cklla.pellicule.ui.theme.TextMuted
 import fr.cklla.pellicule.ui.theme.TextPrimary
 import fr.cklla.pellicule.ui.theme.TextTertiary
@@ -129,6 +136,7 @@ fun DetailScreen(
         onStatusSelected = viewModel::onStatusSelected,
         onWatchedYearSelected = viewModel::onWatchedYearSelected,
         onRatingSelected = viewModel::onRatingSelected,
+        onNotesChanged = viewModel::onNotesChanged,
         onSeasonSelected = viewModel::onSeasonSelected,
         onEpisodeWatchedToggled = viewModel::onEpisodeWatchedToggled,
         onSeasonMarkedWatched = viewModel::onSeasonMarkedWatched,
@@ -160,6 +168,7 @@ private fun DetailContent(
     onStatusSelected: (WatchStatus) -> Unit,
     onWatchedYearSelected: (Int) -> Unit,
     onRatingSelected: (Int?) -> Unit,
+    onNotesChanged: (String) -> Unit,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeWatchedToggled: (EpisodeUiModel) -> Unit,
     onSeasonMarkedWatched: () -> Unit,
@@ -254,6 +263,7 @@ private fun DetailContent(
                         onEpisodeWatchedToggled = onEpisodeWatchedToggled,
                     )
                 }
+                NotesSection(notes = media.notes, onNotesChanged = onNotesChanged)
                 RemoveLink(onClick = { showRemoveConfirm = true })
             } else {
                 AddButton(onClick = onAddMedia)
@@ -627,6 +637,44 @@ private fun RatingSection(rating: Int?, onRatingSelected: (Int?) -> Unit) {
 }
 
 @Composable
+private fun NotesSection(notes: String, onNotesChanged: (String) -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val borderColor = if (isFocused) AccentPurple else BorderHairline.copy(alpha = 0.6f)
+    val notesLabel = stringResource(R.string.detail_notes_label)
+
+    Column {
+        SectionLabel(notesLabel)
+        Spacer(modifier = Modifier.height(10.dp))
+        BasicTextField(
+            value = notes,
+            onValueChange = onNotesChanged,
+            interactionSource = interactionSource,
+            textStyle = PelliculeTextStyles.notesText.copy(color = TextSecondary),
+            cursorBrush = SolidColor(AccentPurple),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 96.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(SurfaceCard)
+                .border(BorderStroke(0.5.dp, borderColor), RoundedCornerShape(8.dp))
+                .padding(12.dp)
+                .semantics { contentDescription = notesLabel },
+            decorationBox = { innerTextField ->
+                if (notes.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.detail_notes_placeholder),
+                        style = PelliculeTextStyles.notesText,
+                        color = AccentPurpleMuted,
+                    )
+                }
+                innerTextField()
+            },
+        )
+    }
+}
+
+@Composable
 private fun EpisodesSection(
     seasons: List<Season>,
     selectedSeasonNumber: Int?,
@@ -898,6 +946,7 @@ private fun DetailContentPreview() {
         type = MediaType.ANIME,
         status = WatchStatus.VU,
         releaseYear = 1997,
+        notes = "Superbe, à revoir. Arrêté à la scène du plateau.",
     )
     val episodes = listOf(
         EpisodeUiModel(seasonNumber = 1, episodeNumber = 1, title = "Premier épisode", stillUrl = null, watched = true),
@@ -928,6 +977,7 @@ private fun DetailContentPreview() {
             onStatusSelected = {},
             onWatchedYearSelected = {},
             onRatingSelected = {},
+            onNotesChanged = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
             onSeasonMarkedWatched = {},
@@ -963,6 +1013,7 @@ private fun DetailContentApercuPreview() {
             onStatusSelected = {},
             onWatchedYearSelected = {},
             onRatingSelected = {},
+            onNotesChanged = {},
             onSeasonSelected = {},
             onEpisodeWatchedToggled = {},
             onSeasonMarkedWatched = {},

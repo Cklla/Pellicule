@@ -23,6 +23,7 @@ fun MediaEntity.toDomain(): Media = Media(
     jellyfinId = jellyfinId,
     rating = rating,
     watchedAt = watchedAt,
+    notes = notes,
 )
 
 fun Media.toEntity(): MediaEntity = MediaEntity(
@@ -36,4 +37,5 @@ fun Media.toEntity(): MediaEntity = MediaEntity(
     jellyfinId = jellyfinId,
     rating = rating,
     watchedAt = watchedAt,
+    notes = notes,
 )

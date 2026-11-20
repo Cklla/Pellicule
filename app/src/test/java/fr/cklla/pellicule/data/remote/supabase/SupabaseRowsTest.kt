@@ -1,6 +1,7 @@
 package fr.cklla.pellicule.data.remote.supabase
 
 import fr.cklla.pellicule.domain.model.EpisodeKey
+import fr.cklla.pellicule.domain.model.MAX_NOTES_LENGTH
 import fr.cklla.pellicule.domain.model.Media
 import fr.cklla.pellicule.domain.model.MediaType
 import fr.cklla.pellicule.domain.model.WatchStatus
@@ -33,6 +34,7 @@ class SupabaseRowsTest {
         jellyfinId = "jf-1",
         rating = 5,
         watchedAt = 1_700_000_000_000,
+        notes = "Superbe, à revoir.",
     )
 
     @Test
@@ -52,6 +54,7 @@ class SupabaseRowsTest {
         assertEquals(2021, row.getValue("release_year").jsonPrimitive.int)
         assertEquals("jf-1", row.getValue("jellyfin_id").jsonPrimitive.content)
         assertEquals("1700000000000", row.getValue("watched_at").jsonPrimitive.content)
+        assertEquals("Superbe, à revoir.", row.getValue("notes").jsonPrimitive.content)
         assertFalse("user_id est rempli par le serveur", row.containsKey("user_id"))
     }
 
@@ -70,12 +73,27 @@ class SupabaseRowsTest {
     @Test
     fun `une ligne serveur avec des colonnes en plus est lue`() {
         val raw = """{"id":"x","user_id":"u","title":"Dune","type":"FILM","status":"A_VOIR","tmdb_id":null,
-            "release_year":null,"poster_url":null,"jellyfin_id":null,"rating":null,"watched_at":null,
+            "release_year":null,"poster_url":null,"jellyfin_id":null,"rating":null,"watched_at":null,"notes":"",
             "created_at":"2026-10-10T12:00:00Z"}"""
 
         val result = json.decodeFromString<MediaRow>(raw).toMediaOrNull()
 
         assertEquals(Media(id = "x", title = "Dune", type = MediaType.FILM, status = WatchStatus.A_VOIR), result)
+    }
+
+    @Test
+    fun `des notes effacees sont envoyees comme chaine vide`() {
+        val row = json.parseToJsonElement(json.encodeToString(MediaRow.serializer(), media.copy(notes = "").toRow())).jsonObject
+
+        // La colonne est non nulle : l'absence de notes est une chaîne vide, et elle doit partir pour écraser l'ancien texte.
+        assertEquals("", row.getValue("notes").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `des notes trop longues sont coupees a la limite du serveur avant l'envoi`() {
+        val row = media.copy(notes = "x".repeat(MAX_NOTES_LENGTH + 10)).toRow()
+
+        assertEquals(MAX_NOTES_LENGTH, row.notes.length)
     }
 
     @Test

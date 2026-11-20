@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import fr.cklla.pellicule.data.local.AppDatabase
 import fr.cklla.pellicule.data.local.MIGRATION_7_8
+import fr.cklla.pellicule.data.local.MIGRATION_8_9
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -47,6 +48,23 @@ class MigrationInstrumentedTest {
         migrated.query("SELECT seq FROM pending_operation").use {
             it.moveToFirst()
             assertEquals(1, it.getInt(0))
+        }
+    }
+
+    @Test
+    fun migrationDe8a9AjouteLesNotesVidesSansRienPerdre() {
+        helper.createDatabase(DB_NAME, 8).apply {
+            execSQL("INSERT INTO media (id, title, type, status) VALUES ('m1', 'Dune', 'FILM', 'VU')")
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(DB_NAME, 9, true, MIGRATION_8_9)
+
+        migrated.query("SELECT title, notes FROM media WHERE id = 'm1'").use {
+            assertEquals(1, it.count)
+            it.moveToFirst()
+            assertEquals("Dune", it.getString(0))
+            assertEquals("", it.getString(1))
         }
     }
 

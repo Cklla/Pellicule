@@ -1,5 +1,6 @@
 package fr.cklla.pellicule.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -24,4 +25,5 @@ data class MediaEntity(
     val jellyfinId: String? = null,
     val rating: Int? = null,
     val watchedAt: Long? = null,
+    @ColumnInfo(defaultValue = "''") val notes: String = "",
 )
